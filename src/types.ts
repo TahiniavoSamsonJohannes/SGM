@@ -1,0 +1,1 @@
+export type TabId = 'dashboard' | 'crew' | 'ships' | 'crewlists' | 'checklist' | 'history' | 'account' | 'data';
