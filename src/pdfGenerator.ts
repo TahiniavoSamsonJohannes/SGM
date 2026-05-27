@@ -39,7 +39,7 @@ const numberToWords = (n: number): string => {
 async function loadLogo(name: string): Promise<HTMLImageElement | null> {
     return new Promise(resolve => {
         const img = new Image();
-        img.src = `/src/assets/${name}.png`;
+        img.src = `/${name}.png`;
         img.onload = () => resolve(img);
         img.onerror = () => resolve(null);
     });
