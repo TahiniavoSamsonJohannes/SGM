@@ -45,6 +45,15 @@ async function loadLogo(name: string): Promise<HTMLImageElement | null> {
     });
 }
 
+// Formate date
+function fmtDate(d: Date): string {
+    return new Date(d).toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    });
+}
+
 // ─── LISTE D'ÉQUIPAGE — reproduit exactement le template fourni ───────────────
 
 export async function generateCrewListPDF(list: CrewList): Promise<void> {
@@ -294,11 +303,6 @@ export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
     doc.text(`IMMATRICULATION : ...................................................................`, 102, 36);
     doc.text(`REFERENCE DOSSIER : .................................................................`, 102, 41);
 
-    // doc.text(`NOM DU NAVIRE : ${doc_.shipName.toUpperCase()}`, marginX, 36);
-    // doc.text(`DESTINATION : ${doc_.destination.toUpperCase()}`, marginX, 41);
-    // doc.text(`IMMATRICULATION : ${doc_.immatriculation.toUpperCase()}`, 102, 36);
-    // doc.text(`REFERENCE DOSSIER : ${doc_.referDossier}`, 102, 41);
-
     // ── Colonnes tableau ──────────────────────────────────────────────
     const startX = 15;
     const startY = 45;
@@ -375,7 +379,7 @@ export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
 
         // ── Date et lieu de naissance ─────────────────────────────────
         const ddn = m.dateNaissance
-            ? `${m.dateNaissance}${m.lieuNaissance ? '\n' + m.lieuNaissance : ''}`
+            ? `${fmtDate(new Date(m.dateNaissance))}${m.lieuNaissance ? '\n' + m.lieuNaissance : ''}`
             : '';
         leftText(ddn, x, y, col[2], rowHeight);
         x += col[2];
@@ -391,7 +395,7 @@ export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
         // ── Une ligne par document* — brevets séparés par " - " ───────
         const brevetsText = m.brevets
             ? m.brevets
-                .split(/[\s,;]+/)          // séparer sur espace, virgule ou point-virgule
+                .split(/[-,;]+/)          // séparer sur tiret, virgule ou point-virgule
                 .map(b => b.trim())
                 .filter(b => b.length > 0)
                 .join(' - ')               // rejoindre avec tiret
@@ -424,7 +428,7 @@ export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
         pageWidth / 2 - 11, safeY + 5.5,
         { align: 'center' }
     );
-    doc.setFont('times', 'italic');
+    doc.setFont('times', 'italic', 'bold');
     doc.text(
         'Safe Manning',
         pageWidth - col[8] - col[7] - col[6] - 23, safeY + 5.5,

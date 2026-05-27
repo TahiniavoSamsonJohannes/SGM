@@ -6,15 +6,10 @@ import type { TabId } from '../types';
 
 export default function Dashboard({ setTab }: { setTab: (t: TabId) => void }) {
     const crewCount = useLiveQuery(() => db.crewMembers.count()) ?? 0;
-    console.log("crewCount", crewCount);
     const shipCount = useLiveQuery(() => db.ships.count()) ?? 0;
-    console.log("shipCount", shipCount);
     const listCount = useLiveQuery(() => db.crewLists.count()) ?? 0;
-    console.log("listCount", listCount);
     const checkCount = useLiveQuery(() => db.checklistDocs.count()) ?? 0;
-    console.log("checkCount", checkCount);
     const recent = useLiveQuery(() => db.crewLists.orderBy('updatedAt').reverse().limit(3).toArray()) ?? [];
-    console.log("recent", recent);
 
     const stats = [
         { icon: Users, label: "Membres d'équipage", value: crewCount, tab: 'crew', color: 'text-ocean-400' },

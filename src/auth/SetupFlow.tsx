@@ -160,7 +160,7 @@ export default function SetupFlow({ onDone, initialStep = 'email' }: Props) {
     };
 
     return (
-        <div className="min-h-screen bg-navy-900 flex items-center justify-center p-4">
+        <div className="max-h-screen bg-navy-900 flex items-start justify-center p-4 overflow-y-auto custom-scroll">
             <div className="w-full max-w-sm bg-navy-800 border border-navy-600
         rounded-2xl shadow-2xl p-6 fade-in">
 
