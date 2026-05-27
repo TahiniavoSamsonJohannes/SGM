@@ -24,7 +24,7 @@ export default function ChecklistPage() {
         })`
     );
 
-    const selectedList = lists.find((l, idx) =>
+    const selectedList = lists.find((_, idx) =>
         suggestions[idx] === search
     );
     const selectedShip = ships.find(s => s.id === selectedList?.shipId);

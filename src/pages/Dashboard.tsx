@@ -2,8 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { Users, FileText, CheckSquare } from 'lucide-react';
 import { db } from '../db';
 import logoUrl from '../assets/logo-ae.png';
-
-type TabId = 'dashboard' | 'crew' | 'ships' | 'crewlists' | 'checklist' | 'history' | 'account' | 'data';
+import type { TabId } from '../types';
 
 export default function Dashboard({ setTab }: { setTab: (t: TabId) => void }) {
     const crewCount = useLiveQuery(() => db.crewMembers.count()) ?? 0;
