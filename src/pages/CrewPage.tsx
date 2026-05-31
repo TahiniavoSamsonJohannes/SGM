@@ -7,6 +7,7 @@ import AutoComplete from '../components/AutoComplete';
 import Input from '../components/Input';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { sortCrewByHierarchy } from '../utils/crewSort';
 
 // ── Formulaire défini HORS du composant parent pour éviter la perte de focus ──
 interface FormProps {
@@ -15,16 +16,18 @@ interface FormProps {
     fonctionSuggestions: string[];
     fasciculeSuggestions: string[];
     brevetSuggestions: string[];
+    nationSuggestions: string[];
 }
 
 function emptyForm() {
     return {
         nom: '', prenom: '', fonction: '', fascicule: '', brevets: '',
         dateNaissance: '', lieuNaissance: '', telephone: '', email: '',
+        nationalite: '',
     };
 }
 
-function MemberForm({ form, setForm, fonctionSuggestions, fasciculeSuggestions, brevetSuggestions }: FormProps) {
+function MemberForm({ form, setForm, fonctionSuggestions, fasciculeSuggestions, brevetSuggestions, nationSuggestions }: FormProps) {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Nom *" value={form.nom}
@@ -59,6 +62,18 @@ function MemberForm({ form, setForm, fonctionSuggestions, fasciculeSuggestions, 
                     onChange={v => setForm(f => ({ ...f, brevets: v }))}
                     suggestions={brevetSuggestions}
                     placeholder="Ex: STCW - BST - FPFF..." />
+            </div>
+
+            <div className="col-span-1 sm:col-span-2">
+                <label className="block text-xs font-medium text-slate-400 mb-1">
+                    Nationalité *
+                </label>
+                <AutoComplete
+                    value={form.nationalite}
+                    onChange={v => setForm(f => ({ ...f, nationalite: v }))}
+                    suggestions={nationSuggestions}
+                    placeholder="Ex: MALAGASY..."
+                />
             </div>
 
             <DatePicker label="Date de naissance *" value={form.dateNaissance}
@@ -96,13 +111,23 @@ export default function CrewPage() {
     const getSuggestions = (type: 'fonction' | 'fascicule' | 'brevet') =>
         dynamicValues.filter(v => v.type === type).map(v => v.value);
 
+    // Ajouter dans les getSuggestions :
+    const getNationSuggestions = () =>
+        dynamicValues.filter(v => v.type === 'nationalite').map(v => v.value);
+
+    const filtered = sortCrewByHierarchy(
+        members.filter(m =>
+            `${m.nom} ${m.prenom} ${m.fonction}`.toLowerCase().includes(search.toLowerCase())
+        )
+    );
+
     const openAdd = () => { setActive(null); setForm(emptyForm()); setFormError(''); setModal('add'); };
     const openEdit = (m: CrewMember) => {
         setActive(m);
         setForm({
             nom: m.nom, prenom: m.prenom, fonction: m.fonction, fascicule: m.fascicule,
             brevets: m.brevets, dateNaissance: m.dateNaissance, lieuNaissance: m.lieuNaissance,
-            telephone: m.telephone ?? '', email: m.email ?? ''
+            telephone: m.telephone ?? '', email: m.email ?? '', nationalite: 'MALAGASY'
         });
         setModal('edit'); setFormError(''); setModal('edit');
     };
@@ -120,6 +145,7 @@ export default function CrewPage() {
         if (!form.dateNaissance.trim()) required.dateNaissance = 'La date de naissance est requise';
         if (!form.lieuNaissance.trim()) required.lieuNaissance = 'Le lieu de naissance est requis';
         if (!form.telephone.trim()) required.telephone = 'Le téléphone est requis';
+        if (!form.nationalite.trim()) required.nationalite = 'La nationalité est requise';
 
         if (Object.keys(required).length > 0) {
             // Afficher la première erreur rencontrée
@@ -184,6 +210,7 @@ export default function CrewPage() {
         // ── Sauvegarde ───────────────────────────────────────────────────
         await addOrIncrementDynamic('fonction', form.fonction);
         await addOrIncrementDynamic('fascicule', form.fascicule);
+        await addOrIncrementDynamic('nationalite', form.nationalite);
         if (form.brevets) await addOrIncrementDynamic('brevet', form.brevets);
 
         if (modal === 'edit' && active?.id) {
@@ -194,10 +221,6 @@ export default function CrewPage() {
         setFormError('');
         setModal(null);
     };
-
-    const filtered = members.filter(m =>
-        `${m.nom} ${m.prenom} ${m.fonction}`.toLowerCase().includes(search.toLowerCase())
-    );
 
     return (
         <div className="h-full flex flex-col gap-4 fade-in overflow-hidden">
@@ -245,7 +268,7 @@ export default function CrewPage() {
                                     {m.nom.toUpperCase()} {m.prenom}
                                 </div>
                                 <div className="text-xs text-slate-500 truncate">
-                                    {m.fonction} · Fasc. {m.fascicule}
+                                    {m.fonction} · {m.fascicule} · {m.nationalite}
                                 </div>
                             </div>
                         </div>
@@ -274,6 +297,7 @@ export default function CrewPage() {
                     fonctionSuggestions={getSuggestions('fonction')}
                     fasciculeSuggestions={getSuggestions('fascicule')}
                     brevetSuggestions={getSuggestions('brevet')}
+                    nationSuggestions={getNationSuggestions()}
                 />
                 {formError && (
                     <p className="text-rose-400 text-xs mt-4 p-3 bg-rose-500/10
@@ -318,6 +342,7 @@ export default function CrewPage() {
                                 ['Naissance', active.dateNaissance && `${active.dateNaissance}${active.lieuNaissance ? ' — ' + active.lieuNaissance : ''}`],
                                 ['Téléphone', active.telephone],
                                 ['Email', active.email],
+                                ['Nationalité', active.nationalite],
                             ] as [string, string][]).filter(([, v]) => v).map(([label, value]) => (
                                 <div key={label} className="bg-navy-700 rounded-lg p-3">
                                     <div className="text-xs text-slate-500 mb-1">{label}</div>

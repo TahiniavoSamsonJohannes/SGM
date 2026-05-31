@@ -25,6 +25,7 @@ import AccountPage from './pages/AccountPage';
 import DataPage from './pages/DataPage';
 
 import logoUrl from './assets/logo-ae.png';
+import ConfirmDialog from './components/ConfirmDialog';
 
 const TABS = [
   { id: 'dashboard' as TabId, label: 'Tableau de bord', icon: LayoutDashboard },
@@ -55,6 +56,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editingList, setEditingList] = useState<CrewList | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -82,6 +84,39 @@ export default function App() {
     init();
   }, []);
 
+  useEffect(() => {
+    if (authState !== 'ok') return;
+
+    const handlePopState = (e: PopStateEvent) => {
+      e.preventDefault();
+
+      // P1 : un modal est ouvert — géré par les modaux eux-mêmes via stopPropagation
+      // On pousse un état pour intercepter le prochain retour
+      window.history.pushState(null, '', window.location.href);
+
+      // P2 : sidebar visible sur mobile
+      if (sidebarOpen) {
+        setSidebarOpen(false);
+        return;
+      }
+
+      // P3 : page ≠ dashboard
+      if (tab !== 'dashboard') {
+        navigate('dashboard');
+        return;
+      }
+
+      // P4 : déjà sur dashboard → demander confirmation
+      setShowExitConfirm(true);
+    };
+
+    // Pousser un état initial pour avoir quelque chose à "dépiler"
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [authState, sidebarOpen, tab]);
+
   // ── Après connexion PIN réussie ──
   const handleLoginSuccess = async () => {
     setTab('dashboard');
@@ -99,6 +134,7 @@ export default function App() {
   const handleLogout = () => {
     // Effacer la session
     sessionStorage.removeItem(SESSION_KEY);
+    setSidebarOpen(false);
     setAuthState('logging-out');
     setTimeout(() => { setTab('dashboard'); setAuthState('login'); }, 500);
   };
@@ -260,6 +296,17 @@ export default function App() {
           </div>
         </main>
       </div>
+
+      <ConfirmDialog
+        open={showExitConfirm}
+        title="Quitter l'application"
+        message="Voulez-vous vraiment quitter l'application ?"
+        confirmLabel="Quitter"
+        cancelLabel="Rester"
+        danger
+        onConfirm={() => window.close()}
+        onCancel={() => setShowExitConfirm(false)}
+      />
     </div>
   );
 }

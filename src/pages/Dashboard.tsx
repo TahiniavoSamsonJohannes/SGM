@@ -14,7 +14,7 @@ export default function Dashboard({ setTab }: { setTab: (t: TabId) => void }) {
     const stats = [
         { icon: Users, label: "Membres d'équipage", value: crewCount, tab: 'crew', color: 'text-ocean-400' },
         { icon: FileText, label: 'Navires', value: shipCount, tab: 'ships', color: 'text-emerald-400' },
-        { icon: FileText, label: "Listes d'équipage", value: listCount, tab: 'crewlist', color: 'text-amber-400' },
+        { icon: FileText, label: "Listes d'équipage", value: listCount, tab: 'crewlists', color: 'text-amber-400' },
         { icon: CheckSquare, label: 'Checklists', value: checkCount, tab: 'checklist', color: 'text-rose-400' },
     ];
 

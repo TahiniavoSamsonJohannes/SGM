@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import type { CrewList, ChecklistDoc } from './db';
 import { logExport } from './db';
+import { sortCrewByHierarchy, calculateAge } from './utils/crewSort';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -67,15 +68,12 @@ export async function generateCrewListPDF(list: CrewList): Promise<void> {
 
     const pageWidth = doc.internal.pageSize.getWidth();
     doc.setLineWidth(0.3);
+    doc.setTextColor(0, 0, 0);
+    doc.setFillColor(255, 255, 255);
 
     const img = await loadLogo('logo-ae');
 
-    // ── Constantes de mise en page ──
-    const startX = 15;
-    const textX = startX;
-    const members = list.members;
-
-    // ── Logo ──
+    // ── Logo + infos haut gauche ──────────────────────────────────────
     const armText = 'ARMEMENT EUSTRATIOU';
     doc.setFont('times', 'bold');
     doc.setFontSize(9);
@@ -87,112 +85,140 @@ export async function generateCrewListPDF(list: CrewList): Promise<void> {
         const ratio = img.width / img.height;
         const imgWidth = 18;
         const imgHeight = imgWidth / ratio;
-        const imgX = textX + (textWidth - imgWidth) / 2;
+        const imgX = 15 + (textWidth - imgWidth) / 2;
         doc.addImage(img, 'PNG', imgX, y, imgWidth, imgHeight);
         y += imgHeight + 10 * 0.3;
     }
 
-    // ── Nom société ──
     doc.setFont('times', 'bold');
     doc.setFontSize(9);
-    doc.setTextColor(0, 0, 0);
-    doc.text(armText, textX, y);
+    doc.text(armText, 15, y);
     y += 4;
 
-    // ── Infos navire / capitaine ──
     doc.setFont('times', 'normal');
     doc.setFontSize(9);
-    doc.text(`Navire : ${list.shipName.toUpperCase()}`, startX, y);
+    doc.text(`Navire : ${list.shipName.toUpperCase()}`, 15, y);
     y += 4;
-    doc.text(`Capitaine : ${list.capitaine.toUpperCase()}`, startX, y);
+    doc.text(`Capitaine : ${list.capitaine.toUpperCase()}`, 15, y);
     y += 7;
 
-    // ── Titre centré ──
+    // ── Titre centré ──────────────────────────────────────────────────
     const subtitle = "LISTE D'EQUIPAGE";
     const subtitleWidth = doc.getTextWidth(subtitle) + 6;
     doc.setFont('times', 'bold');
     doc.setFontSize(10);
     doc.text(subtitle, pageWidth / 2, y, { align: 'center' });
     doc.line(
-        pageWidth / 2 - subtitleWidth / 2,
-        y + 1,
-        pageWidth / 2 + subtitleWidth / 2,
-        y + 1
+        pageWidth / 2 - subtitleWidth / 2, y + 1,
+        pageWidth / 2 + subtitleWidth / 2, y + 1
     );
     y += 6;
 
-    // ── Départ / Destination ──
+    // ── Départ / Destination ──────────────────────────────────────────
     doc.setFontSize(9);
     doc.setFont('times', 'bold');
-    doc.text('Départ de : ', startX, y);
+    doc.text('Départ de : ', 15, y);
     doc.setFont('times', 'normal');
-    doc.text(list.lieuDepart.toUpperCase(), startX + 16, y);
+    doc.text(list.lieuDepart.toUpperCase(), 15 + 16, y);
     doc.setFont('times', 'bold');
     doc.text('Destination : ', pageWidth / 2, y);
     doc.setFont('times', 'normal');
     doc.text(list.destination.toUpperCase(), pageWidth / 2 + 18, y);
     y += 2;
 
-    // ── Tableau ──
-    // Colonnes : 5%, 30%, 20%, 10%, 35% de (pageWidth - 30)
+    // ── Colonnes ──────────────────────────────────────────────────────
     const usable = pageWidth - 30;
     const col = [
-        usable * 0.05,   // N°
-        usable * 0.30,   // Nom
-        usable * 0.20,   // Fonction
-        usable * 0.10,   // Fascicule
-        usable * 0.35,   // Brevets
+        (4 / 100) * usable,  // N°
+        (17 / 100) * usable,  // NOM ET PRENOMS
+        (10 / 100) * usable,  // FONCTION
+        (19 / 100) * usable,  // DATE ET LIEU DE NAISSANCE
+        (4 / 100) * usable,  // AGE
+        (8 / 100) * usable,  // CONTACT
+        (10 / 100) * usable,  // NATIONALITE
+        (8 / 100) * usable,  // FASCICULE
+        (20 / 100) * usable,  // BREVETS
     ];
 
-    const headers = ['N°', 'NOM ET PRENOMS', 'FONCTION', 'FASCICULE', 'BREVETS'];
+    const headers = [
+        'N°',
+        'NOM ET PRENOMS',
+        'FONCTION',
+        'DATE ET LIEU DE NAISSANCE',
+        'AGE',
+        'CONTACT',
+        'NATIONALITE',
+        'FASCICULE',
+        'BREVETS',
+    ];
+
+    const headerH = 7;
     const lineHeight = 3;
     const rowHeight = 6;
 
-    // En-tête
+    // ── En-tête ───────────────────────────────────────────────────────
     doc.setFont('times', 'bold');
-    doc.setFontSize(9);
+    doc.setFontSize(7);
     doc.setFillColor(255, 255, 255);
-    doc.setTextColor(0, 0, 0);
 
-    let x = startX;
+    let x = 15;
     headers.forEach((h, i) => {
-        doc.rect(x, y, col[i], 5);
-        doc.text(h, x + col[i] / 2, y + 3.5, { align: 'center' });
+        doc.rect(x, y, col[i], headerH);
+        const lines = doc.splitTextToSize(h, col[i] - 2);
+        const totalH = lines.length * 3;
+        const textY = y + (headerH - totalH) / 2 + 3;
+        doc.text(lines, x + col[i] / 2, textY, { align: 'center' });
         x += col[i];
     });
-    y += 5;
+    y += headerH;
 
-    // Données
+    // ── Données — triées par hiérarchie ───────────────────────────────
+    const sortedMembers = sortCrewByHierarchy(list.members);
+
     doc.setFont('times', 'normal');
-    doc.setFontSize(7);
+    doc.setFontSize(6.5);
 
-    members.forEach((m, idx) => {
+    sortedMembers.forEach((m, idx) => {
+        const age = calculateAge(m.dateNaissance);
+        const ddn = m.dateNaissance
+            ? `${fmtDate(new Date(m.dateNaissance))}${m.lieuNaissance ? ', ' + m.lieuNaissance : ''}`
+            : '';
+
         const row = [
             String(idx + 1).padStart(2, '0'),
             `${m.nom.toUpperCase()} ${m.prenom.toUpperCase()}`,
             m.fonction.toUpperCase(),
+            ddn,
+            age,
+            m.telephone || '',
+            (m.nationalite || '').toUpperCase(),
             m.fascicule,
-            m.brevets,
+            m.brevets
+                ? m.brevets.split(/[\s,;]+/).filter(b => b.trim()).join(' - ')
+                : '',
         ];
 
+        // Préparer les lignes de chaque cellule
         const preparedRow = row.map((cell, i) =>
-            doc.splitTextToSize(String(cell), col[i] - 4)
+            doc.splitTextToSize(String(cell), col[i] - 2)
         );
 
-        x = startX;
+        x = 15;
         preparedRow.forEach((lines, i) => {
             doc.rect(x, y, col[i], rowHeight);
 
-            const textBlockHeight = lines.length * lineHeight;
-            const textY = y + (rowHeight - textBlockHeight) / 2 + lineHeight - 0.5;
+            const textBlockH = lines.length * lineHeight;
+            const textY = y + (rowHeight - textBlockH) / 2 + lineHeight - 0.5;
 
-            if (i !== 1) {
-                doc.text(lines, x + col[i] / 2, textY, {
-                    maxWidth: col[i] - 4,
-                    align: 'center',
-                });
+            // Alignement : centré sauf col 1 (nom) et col 3 (date/lieu)
+            const isLeft = i === 1 || i === 3;
+            if (isLeft) {
+                doc.text(lines, x + 1.5, textY, { maxWidth: col[i] - 2 });
             } else {
-                doc.text(lines, x + 2, textY, { maxWidth: col[i] - 4 });
+                doc.text(lines, x + col[i] / 2, textY, {
+                    align: 'center',
+                    maxWidth: col[i] - 2,
+                });
             }
             x += col[i];
         });
@@ -200,23 +226,21 @@ export async function generateCrewListPDF(list: CrewList): Promise<void> {
         y += rowHeight;
     });
 
-    // ── Footer ──
+    // ── Footer ────────────────────────────────────────────────────────
     y += 5;
-    const words = numberToWords(members.length);
+    const words = numberToWords(sortedMembers.length);
     doc.setFontSize(10);
     doc.setFont('times', 'normal');
     doc.text(
-        `Arrêté la présente liste au nombre de ${words} (${members.length}) membres d'équipage.`,
-        startX,
-        y
+        `Arrêté la présente liste au nombre de ${words} (${sortedMembers.length}) membres d'équipage.`,
+        15, y
     );
-
     y += 10;
-    doc.text(`Bord le ........................`, startX + col[0], y);
+    doc.text('Bord le ........................', 15 + col[0], y);
     y += 10;
-    doc.text('Le Capitaine', startX + col[0], y);
+    doc.text('Le Capitaine', 15 + col[0], y);
 
-    // ── Sauvegarde ──
+    // ── Sauvegarde ────────────────────────────────────────────────────
     const filename = buildFilename('AE_LISTE_EQUIPAGE');
     doc.save(`${filename}.pdf`);
 
@@ -225,7 +249,7 @@ export async function generateCrewListPDF(list: CrewList): Promise<void> {
         filename: `${filename}.pdf`,
         shipName: list.shipName,
         destination: list.destination,
-        membersCount: members.length,
+        membersCount: sortedMembers.length,
         exportedAt: new Date(),
     });
 }
@@ -298,10 +322,10 @@ export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
 
     // ── Infos haut ────────────────────────────────────────────────────
     doc.setFontSize(10);
-    doc.text(`NOM DU NAVIRE : ........................................................`, marginX, 36);
-    doc.text(`DESTINATION : ..............................................................`, marginX, 41);
-    doc.text(`IMMATRICULATION : ...................................................................`, 102, 36);
-    doc.text(`REFERENCE DOSSIER : .................................................................`, 102, 41);
+    doc.text(`NOM DU NAVIRE : ${doc_.shipName.toUpperCase()}`, marginX, 36);
+    doc.text(`DESTINATION : ${doc_.destination.toUpperCase()}`, marginX, 41);
+    doc.text(`IMMATRICULATION : ${doc_.immatriculation}`, 102, 36);
+    doc.text(`REFERENCE DOSSIER : ${doc_.referDossier}`, 102, 41);
 
     // ── Colonnes tableau ──────────────────────────────────────────────
     const startX = 15;

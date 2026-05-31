@@ -19,6 +19,7 @@ export interface CrewMember {
     lieuNaissance: string;
     telephone: string;
     email: string;
+    nationalite: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -66,7 +67,7 @@ export interface ExportedFile {
 
 export interface DynamicValue {
     id?: number;
-    type: 'fonction' | 'fascicule' | 'brevet';
+    type: 'fonction' | 'fascicule' | 'brevet' | 'nationalite';
     value: string;
     usageCount: number;
 }
@@ -98,8 +99,8 @@ class MaritimeDB extends Dexie {
 
     constructor() {
         super('MaritimeDB');
-        this.version(5).stores({
-            crewMembers: '++id, nom, prenom, fonction, fascicule',
+        this.version(6).stores({
+            crewMembers: '++id, nom, prenom, fonction, fascicule, nationalite',
             ships: '++id, nom, immatriculation',
             crewLists: '++id, shipId, updatedAt',
             checklistDocs: '++id, crewListId, createdAt',
@@ -144,6 +145,7 @@ export async function seedDynamicValues() {
             { type: 'fonction', value: 'MATELOT QUALIFIÉ', usageCount: 0 },
             { type: 'fonction', value: 'MATELOT', usageCount: 0 },
             { type: 'fonction', value: 'CUISINIER', usageCount: 0 },
+            { type: 'nationalite', value: 'MALAGASY', usageCount: 0 },
         ]);
     }
 }
