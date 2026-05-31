@@ -7,6 +7,7 @@ import { db, type CrewList } from '../db';
 import { generateCrewListPDF } from '../pdfGenerator';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { fmtDateTime } from '../utils/fmtDate';
 
 interface Props {
     onCreateNew: () => void;
@@ -16,17 +17,6 @@ interface Props {
 // Formate l'id en 10 chiffres avec zéros à gauche
 function formatId(id: number | undefined): string {
     return String(id ?? 0).padStart(10, '0');
-}
-
-// Formate date + heure
-function fmtDateTime(d: Date): string {
-    return new Date(d).toLocaleString('fr-FR', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
 }
 
 export default function CrewListsPage({ onCreateNew, onEditList }: Props) {

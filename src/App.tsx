@@ -88,6 +88,7 @@ export default function App() {
     if (authState !== 'ok') return;
 
     const handlePopState = (e: PopStateEvent) => {
+      console.log('PopEvent fired');
       e.preventDefault();
 
       // P1 : un modal est ouvert — géré par les modaux eux-mêmes via stopPropagation
@@ -106,11 +107,14 @@ export default function App() {
         return;
       }
 
+
       // P4 : déjà sur dashboard → demander confirmation
       setShowExitConfirm(true);
     };
 
     // Pousser un état initial pour avoir quelque chose à "dépiler"
+    //console.log('AddStack');
+    
     window.history.pushState(null, '', window.location.href);
     window.addEventListener('popstate', handlePopState);
 
@@ -136,6 +140,7 @@ export default function App() {
     sessionStorage.removeItem(SESSION_KEY);
     setSidebarOpen(false);
     setAuthState('logging-out');
+    setShowExitConfirm(false);
     setTimeout(() => { setTab('dashboard'); setAuthState('login'); }, 500);
   };
 
@@ -299,12 +304,12 @@ export default function App() {
 
       <ConfirmDialog
         open={showExitConfirm}
-        title="Quitter l'application"
-        message="Voulez-vous vraiment quitter l'application ?"
-        confirmLabel="Quitter"
-        cancelLabel="Rester"
+        title="Déconnexion"
+        message="Voulez-vous vous déconnectez ?"
+        confirmLabel="Se déconnecter"
+        cancelLabel="Annuler"
         danger
-        onConfirm={() => window.close()}
+        onConfirm={handleLogout}
         onCancel={() => setShowExitConfirm(false)}
       />
     </div>

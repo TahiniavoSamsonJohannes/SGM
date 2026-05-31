@@ -8,6 +8,7 @@ import Input from '../components/Input';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { sortCrewByHierarchy } from '../utils/crewSort';
+import { fmtDate } from '../utils/fmtDate';
 
 // ── Formulaire défini HORS du composant parent pour éviter la perte de focus ──
 interface FormProps {
@@ -339,7 +340,7 @@ export default function CrewPage() {
                             {([
                                 ['Fascicule / LPM', active.fascicule],
                                 ['Brevets', active.brevets],
-                                ['Naissance', active.dateNaissance && `${active.dateNaissance}${active.lieuNaissance ? ' — ' + active.lieuNaissance : ''}`],
+                                ['Naissance', active.dateNaissance && `${fmtDate(new Date(active.dateNaissance))}${active.lieuNaissance ? ', ' + active.lieuNaissance : ''}`],
                                 ['Téléphone', active.telephone],
                                 ['Email', active.email],
                                 ['Nationalité', active.nationalite],

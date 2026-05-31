@@ -3,6 +3,7 @@ import { Users, FileText, CheckSquare } from 'lucide-react';
 import { db } from '../db';
 import logoUrl from '../assets/logo-ae.png';
 import type { TabId } from '../types';
+import { fmtDateTime } from '../utils/fmtDate';
 
 export default function Dashboard({ setTab }: { setTab: (t: TabId) => void }) {
     const crewCount = useLiveQuery(() => db.crewMembers.count()) ?? 0;
@@ -17,12 +18,6 @@ export default function Dashboard({ setTab }: { setTab: (t: TabId) => void }) {
         { icon: FileText, label: "Listes d'équipage", value: listCount, tab: 'crewlists', color: 'text-amber-400' },
         { icon: CheckSquare, label: 'Checklists', value: checkCount, tab: 'checklist', color: 'text-rose-400' },
     ];
-
-    const fmtDateTime = (d: Date) =>
-        new Date(d).toLocaleString('fr-FR', {
-            day: '2-digit', month: 'short', year: 'numeric',
-            hour: '2-digit', minute: '2-digit',
-        });
 
     return (
         <div className="space-y-8 fade-in">

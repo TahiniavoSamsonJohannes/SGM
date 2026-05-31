@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import type { CrewList, ChecklistDoc } from './db';
 import { logExport } from './db';
 import { sortCrewByHierarchy, calculateAge } from './utils/crewSort';
+import { fmtDate } from './utils/fmtDate';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -43,15 +44,6 @@ async function loadLogo(name: string): Promise<HTMLImageElement | null> {
         img.src = `/${name}.png`;
         img.onload = () => resolve(img);
         img.onerror = () => resolve(null);
-    });
-}
-
-// Formate date
-function fmtDate(d: Date): string {
-    return new Date(d).toLocaleString('fr-FR', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
     });
 }
 
@@ -152,21 +144,20 @@ export async function generateCrewListPDF(list: CrewList): Promise<void> {
         'BREVETS',
     ];
 
-    const headerH = 7;
+    const headerH = 5;
     const lineHeight = 3;
     const rowHeight = 6;
 
     // ── En-tête ───────────────────────────────────────────────────────
     doc.setFont('times', 'bold');
-    doc.setFontSize(7);
+    doc.setFontSize(9);
     doc.setFillColor(255, 255, 255);
 
     let x = 15;
     headers.forEach((h, i) => {
         doc.rect(x, y, col[i], headerH);
         const lines = doc.splitTextToSize(h, col[i] - 2);
-        const totalH = lines.length * 3;
-        const textY = y + (headerH - totalH) / 2 + 3;
+        const textY = y + 3.5;
         doc.text(lines, x + col[i] / 2, textY, { align: 'center' });
         x += col[i];
     });
@@ -194,7 +185,7 @@ export async function generateCrewListPDF(list: CrewList): Promise<void> {
             (m.nationalite || '').toUpperCase(),
             m.fascicule,
             m.brevets
-                ? m.brevets.split(/[\s,;]+/).filter(b => b.trim()).join(' - ')
+                ? m.brevets.split(/[/,;-]+/).filter(b => b.trim()).join('-')
                 : '',
         ];
 
@@ -210,8 +201,15 @@ export async function generateCrewListPDF(list: CrewList): Promise<void> {
             const textBlockH = lines.length * lineHeight;
             const textY = y + (rowHeight - textBlockH) / 2 + lineHeight - 0.5;
 
-            // Alignement : centré sauf col 1 (nom) et col 3 (date/lieu)
-            const isLeft = i === 1 || i === 3;
+            // Alignement : centré sauf col 1 (nom)
+            if (i === 0) {
+                doc.setFontSize(8);
+                doc.setFont('times', 'bold');
+            } else {
+                doc.setFont('times', 'normal');
+                doc.setFontSize(6.5);
+            }
+            const isLeft = i === 1;
             if (isLeft) {
                 doc.text(lines, x + 1.5, textY, { maxWidth: col[i] - 2 });
             } else {
@@ -419,10 +417,10 @@ export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
         // ── Une ligne par document* — brevets séparés par " - " ───────
         const brevetsText = m.brevets
             ? m.brevets
-                .split(/[-,;]+/)          // séparer sur tiret, virgule ou point-virgule
+                .split(/[/,;-]+/)          // séparer sur tiret, virgule ou point-virgule
                 .map(b => b.trim())
                 .filter(b => b.length > 0)
-                .join(' - ')               // rejoindre avec tiret
+                .join('-')               // rejoindre avec tiret
             : '';
         leftText(brevetsText, x, y, col[5], rowHeight);
         x += col[5];
