@@ -3,7 +3,7 @@ import { Users, FileText, CheckSquare } from 'lucide-react';
 import { db } from '../db';
 import logoUrl from '../assets/logo-ae.png';
 import type { TabId } from '../types';
-import { fmtDateTime } from '../utils/fmtDate';
+import { fmtDateTime } from '../utils/fmt';
 
 export default function Dashboard({ setTab }: { setTab: (t: TabId) => void }) {
     const crewCount = useLiveQuery(() => db.crewMembers.count()) ?? 0;

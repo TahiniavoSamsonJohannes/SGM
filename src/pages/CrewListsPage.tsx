@@ -7,7 +7,7 @@ import { db, type CrewList } from '../db';
 import { generateCrewListPDF } from '../pdfGenerator';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { fmtDateTime } from '../utils/fmtDate';
+import { fmtDateTime } from '../utils/fmt';
 
 interface Props {
     onCreateNew: () => void;

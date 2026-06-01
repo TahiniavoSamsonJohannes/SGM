@@ -1,8 +1,8 @@
 import jsPDF from 'jspdf';
 import type { CrewList, ChecklistDoc } from './db';
-import { logExport } from './db';
+import { computeContractTotals, logExport } from './db';
 import { sortCrewByHierarchy, calculateAge } from './utils/crewSort';
-import { fmtDate } from './utils/fmtDate';
+import { fmtDate, fmtDateLong, fmtDateShort, fmtNumber } from './utils/fmt';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -134,7 +134,7 @@ export async function generateCrewListPDF(list: CrewList): Promise<void> {
 
     const headers = [
         'N°',
-        'NOM ET PRENOMS',
+        'NOM ET PRENOM(S)',
         'FONCTION',
         'DATE ET LIEU DE NAISSANCE',
         'AGE',
@@ -353,7 +353,7 @@ export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
     let x = startX;
 
     rect(x, startY, col[0], totalHeader); centerText('N°', x, startY, col[0], totalHeader); x += col[0];
-    rect(x, startY, col[1], totalHeader); centerText('Nom et prénoms', x, startY, col[1], totalHeader); x += col[1];
+    rect(x, startY, col[1], totalHeader); centerText('Nom et prénom(s)', x, startY, col[1], totalHeader); x += col[1];
     rect(x, startY, col[2], totalHeader); centerText(['Date et lieu', 'de naissance'], x, startY, col[2], totalHeader); x += col[2];
     rect(x, startY, col[3], totalHeader); centerText('Fonction', x, startY, col[3], totalHeader); x += col[3];
     rect(x, startY, col[4], totalHeader); centerText('LPM', x, startY, col[4], totalHeader); x += col[4];
@@ -510,5 +510,336 @@ export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
         destination: doc_.destination,
         membersCount: doc_.members.length,
         exportedAt: new Date(),
+    });
+}
+
+export interface ContractPDFData {
+    nom: string;
+    prenom: string;
+    dateNaissance: string;
+    lieuNaissance: string;
+    adresse: string;
+    fascicule: string;
+    shipName: string;
+    immatriculation: string;
+    fonction: string;
+    dateDebut: string;
+    dateFin: string;
+    salaireBaseJournalier: number;
+    forfaitHeuresSupp: number;
+    salaireCongeJournalier: number;
+    indemRNC: number;
+    beneficiaire: string;
+    numCompteBancaire: string;
+    montantDelegation: number;
+}
+
+export async function generateContractPDF(data: ContractPDFData): Promise<void> {
+    const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        putOnlyUsedFonts: true,
+        floatPrecision: 'smart',
+    } as any);
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginX = 15;
+    const marginY = 25;
+
+    // ── Calculs automatiques ──────────────────────────────────────
+    const {
+        totalSalaireBase,
+        totalForfait,
+        totalConge,
+        totalRNC,
+        totalGeneral,
+    } = computeContractTotals(data);
+
+    let y = marginY;
+
+    // ═══════════════════════════════════════════════════════════════
+    // PAGE 1
+    // ═══════════════════════════════════════════════════════════════
+
+    // ── Titre ──────────────────────────────────────────────────────
+    doc.setFont('times', 'bold');
+    doc.setFontSize(17);
+    doc.rect(marginX, y, pageWidth - marginX * 2, -12);
+    doc.text(
+        "CONTRAT INDIVIDUEL D'ENGAGEMENT MARITIME",
+        pageWidth / 2, y - 4,
+        { align: 'center' }
+    );
+
+    y += 20;
+
+    // ── Préambule ──────────────────────────────────────────────────
+    doc.setFont('times', 'normal');
+    doc.setFontSize(11);
+    const p1 = 'Nous soussignés, Société Eustratiou & Fils, ARMEMENT EUTRATIOU, 18 Rue Richelieu Amparisaka 401 MAHAJANGA.';
+    doc.text(doc.splitTextToSize(p1, pageWidth - marginX * 2), marginX, y);
+
+    y += 20;
+
+    // ── Déclaration ────────────────────────────────────────────────
+    const col2X = pageWidth / 2 - 25;  // position des valeurs
+    const sepX = pageWidth / 2 - 29;  // position des ":"
+
+    doc.setFont('times', 'bold');
+    doc.text('Déclarons embaucher,', marginX, y);
+
+    const fields: [string, string][] = [
+        ['Nom', data.nom.toUpperCase()],
+        ['Prénom(s)', data.prenom],
+        ['Date et lieu de naissance', `${fmtDateLong(data.dateNaissance)} à ${data.lieuNaissance}`],
+        ['N° de livret Maritime', data.fascicule],
+        ['Adresse', data.adresse],
+        ['Pour embarquer à bord du navire', data.shipName.toUpperCase()],
+        ['Immatriculé', data.immatriculation],
+        ['En qualité de', data.fonction.toUpperCase()],
+    ];
+
+    fields.forEach(([label, value]) => {
+        y += (label === 'Nom') ? 6 : 8;
+        doc.setFont('times', 'normal');
+        doc.text(label, marginX + 5, y);
+        doc.text(':', sepX, y);
+        doc.text(value, col2X, y);
+    });
+
+    // ── Section 1 : Durée ──────────────────────────────────────────
+    y += 8;
+    doc.setFont('times', 'bold');
+    doc.text('1- Durée du contrat', marginX, y);
+    doc.setLineWidth(0.3);
+    doc.line(marginX, y + 1, 48, y + 1);
+
+    y += 6;
+    doc.setFont('times', 'normal');
+    doc.text('Ce contrat prend effet à compter du :', marginX + 5, y);
+    doc.text(`${fmtDateShort(data.dateDebut)},`, pageWidth / 2 - 25, y);
+    doc.text("jusqu'au :", pageWidth / 2 + 10, y);
+    doc.text(fmtDateShort(data.dateFin), pageWidth / 2 + 28, y);
+
+    // ── Section 2 : Obligations ────────────────────────────────────
+    y += 8;
+    doc.setFont('times', 'bold');
+    doc.text('2- Obligations et fonctions', marginX, y);
+    doc.line(marginX, y + 1, 58.5, y + 1);
+
+    y += 6;
+    doc.setFont('times', 'normal');
+    const p2 = "Le marin embarquera à n'importe quel moment sur un navire appartenant ou géré par l'armateur pour occuper le poste en fonction pour lequel il a été formé. En tout état de cause, les conditions d'engagement restent les mêmes quelle que soit la taille du navire à bord duquel il va servir. Il s'engage à respecter les disciplines à bord du navire et les règlements intérieurs de la société.";
+    doc.text(doc.splitTextToSize(p2, pageWidth - marginX * 2), marginX + 5, y);
+
+    y += 22;
+    const p3 = "Le marin est tenu à une obligation de résultat. A part son esprit d'initiative, il doit prouver à son armateur sa capacité d'adaptation, d'innovation, d'organisation.";
+    doc.text(doc.splitTextToSize(p3, pageWidth - marginX * 2 - 5), marginX + 5, y);
+
+    y += 12;
+    const p4 = "Le manquement à cette obligation de résultat peut entraîner la suspension de toutes ou parties des primes.";
+    doc.text(doc.splitTextToSize(p4, pageWidth - marginX * 2 - 5), marginX + 5, y);
+
+    // ── Section 3 : Rémunération ───────────────────────────────────
+    y += 8;
+    doc.setFont('times', 'bold');
+    doc.text('3- Rémunération', marginX, y);
+    doc.line(marginX, y + 1, 43.5, y + 1);
+
+    y += 6;
+    doc.setFont('times', 'normal');
+    doc.text('Les parties ont adopté un mode de rémunération mensuelle :', marginX + 5, y);
+
+    // ── 3.1 Salaire ────────────────────────────────────────────────
+    y += 6;
+    doc.setFont('times', 'bold');
+    doc.text('3.1- La salaire', marginX + 10, y);
+    doc.line(marginX + 10, y + 1, 48.8, y + 1);
+    doc.text('Nbj/mois', pageWidth / 2 + 10, y);
+    doc.text('Total mensuel', pageWidth / 2 + 50, y);
+
+    const salaryRows: [string, number, string, string, number][] = [
+        // [label, valeur journalière, unité, nbj, total]
+        ['Salaire de base journalier', data.salaireBaseJournalier, 'Ar', '30', totalSalaireBase],
+        ['Forfait heures supplémentaires', data.forfaitHeuresSupp, 'Ar', 'Mensuel', totalForfait],
+        ['Salaire journalier de congé', data.salaireCongeJournalier, 'Ar', '06', totalConge],
+        ['Indemnité de RNC', data.indemRNC, 'Ar', '12', totalRNC],
+    ];
+
+    salaryRows.forEach(([label, valeur, unite, nbj, total]) => {
+        y += 7;
+        doc.setFont('times', 'normal');
+        doc.text(`-  ${label}`, marginX + 12, y);
+        doc.text(':', pageWidth / 2 - 20, y);
+        doc.text(fmtNumber(valeur), pageWidth / 2 - 17, y);
+        doc.text(unite, pageWidth / 2 + 2, y);
+        doc.text(String(nbj), pageWidth / 2 + 15, y);
+        doc.text(`${fmtNumber(total)} Ar`, pageWidth - marginX - 15, y, { align: 'right' });
+    });
+
+    y += 6;
+    doc.setFont('times', 'bold');
+    doc.text('TOTAL :', pageWidth / 2 + 49, y, { align: 'right' });
+    doc.text(`${fmtNumber(totalGeneral)} Ar`, pageWidth - marginX - 15, y, { align: 'right' });
+
+    // ── 3.2 Délégation ─────────────────────────────────────────────
+    y += 6;
+    doc.setFont('times', 'bold');
+    doc.text('3.2- Délégation de salaire', marginX + 10, y);
+    doc.line(marginX + 10, y + 1, 66.8, y + 1);
+
+    y += 7;
+    doc.setFont('times', 'normal');
+    doc.text(`-  Bénéficiaire : ${data.beneficiaire || ''}`, marginX + 12, y);
+    y += 7;
+    doc.text(`-  Compte bancaire n° : ${data.numCompteBancaire || ''}`, marginX + 12, y);
+    y += 7;
+    doc.text(`-  Montant : ${data.montantDelegation ? fmtNumber(data.montantDelegation) + ' Ar' : ''}`, marginX + 12, y);
+
+    // ═══════════════════════════════════════════════════════════════
+    // PAGE 2
+    // ═══════════════════════════════════════════════════════════════
+    doc.addPage();
+    doc.setFontSize(11);
+    y = marginY;
+
+    const sections: Array<{
+        title: string;
+        underlineEnd: number;
+        text: string;
+        afterY: number;
+    }> = [
+            {
+                title: '4- Nourriture et hébergement',
+                underlineEnd: 64,
+                text: "Pendant la durée de son embarquement, le marin est nourri en tenant compte des habitudes alimentaires de l'ensemble du personnel. Il est logé à bord dans une bonne condition d'hygiène et de sécurité.",
+                afterY: 12,
+            },
+            {
+                title: '5- Congés et repos',
+                underlineEnd: 45.5,
+                text: "Pendant la durée de son embarquement effectif, le marin aura droit à un congé de 6 jours par mois d'embarquement. Un mois d'embarquement effectif donne droit à 10 jours de repos.",
+                afterY: 12,
+            },
+            {
+                title: '6- Retenues',
+                underlineEnd: 34.5,
+                text: "Le salaire brut du marin est soumis aux différentes retenues légales (sociales et fiscales) en vigueur à Madagascar.",
+                afterY: 12,
+            },
+            {
+                title: '7- Blessures et maladies',
+                underlineEnd: 54.5,
+                text: "Au cas où une maladie ou une blessure surviendrait au marin lors de l'exercice de sa fonction, les charges relatives à son traitement (jusqu'à son rétablissement ou pour une période maximum de quatre mois après la date de son embarquement) sont supportées à 80% par l'OSIEM.",
+                afterY: 16,
+            },
+            {
+                title: '8- Sécurité sociale',
+                underlineEnd: 45,
+                text: "L'employé sera affilié par l'Employeur à la CNAPS pour toutes les questions de prévoyance sociale, et accepte de payer les cotisations subséquentes par voie de précompte sur appointements notamment en matière :",
+                afterY: 12,
+            },
+        ];
+
+    sections.forEach(s => {
+        doc.setFont('times', 'bold');
+        doc.text(s.title, marginX, y);
+        doc.line(marginX, y + 1, s.underlineEnd, y + 1);
+        y += 6;
+        doc.setFont('times', 'normal');
+        doc.text(doc.splitTextToSize(s.text, pageWidth - marginX - 10), marginX + 5, y);
+        y += s.afterY;
+    });
+
+    // Points CNAPS
+    [
+        "d'accident de travail",
+        'de maladies professionnelles',
+        'de régime de retraite',
+        "d'allocations familiales",
+    ].forEach(item => {
+        doc.text(`-    ${item}`, marginX + 12, y);
+        y += 6;
+    });
+
+    // Sections 9 à 12
+    const sections2: Array<{
+        title: string;
+        underlineEnd: number;
+        text: string;
+        afterY: number;
+    }> = [
+            {
+                title: '9- Accident et décès',
+                underlineEnd: 48,
+                text: "En cas de décès ou infirmité permanente, le marin est couvert par une « assurance individuelle contre les accidents » contracté auprès de l'assurance ARO.",
+                afterY: 12,
+            },
+            {
+                title: '10- Litiges',
+                underlineEnd: 32.5,
+                text: "Les litiges entre le marin et l'armateur relèvent du tribunal de droit commun malgache après l'échec d'une tentative de conciliation devant l'autorité administrative maritime.",
+                afterY: 12,
+            },
+            {
+                title: '11- Rapatriement du marin',
+                underlineEnd: 61,
+                text: "Le rapatriement du marin est à la charge du navire ou de l'armateur quel que soit le port de débarquement du marin jusqu'à son port d'embarquement ou au port d'attache du navire.",
+                afterY: 12,
+            },
+            {
+                title: '12- Résiliation du contrat',
+                underlineEnd: 57.5,
+                text: "Le contrat d'engagement maritime prend fin selon les conditions prévues par les articles 3.7.01 jusqu'à 3.7.05 du code maritime malgache.",
+                afterY: 12,
+            },
+        ];
+
+    sections2.forEach(s => {
+        y += 2;
+        doc.setFont('times', 'bold');
+        doc.text(s.title, marginX, y);
+        doc.line(marginX, y + 1, s.underlineEnd, y + 1);
+        y += 6;
+        doc.setFont('times', 'normal');
+        doc.text(doc.splitTextToSize(s.text, pageWidth - marginX - 10), marginX + 5, y);
+        y += s.afterY;
+    });
+
+    // ── Clause finale ──────────────────────────────────────────────
+    const pFinal = "Les parties ayant acceptées les conditions d'engagement citées ci-dessus, déclarent avoir pris connaissances des conditions générales d'engagement maritime des marins malgache prévue par la loi n°99-028 du 03 Février 2000 portant code maritime malgache.";
+    doc.setFont('times', 'normal');
+    doc.text(doc.splitTextToSize(pFinal, pageWidth - marginX - 10), marginX, y);
+
+    // ── Signatures ─────────────────────────────────────────────────
+    y += 20;
+    doc.text('Fait à Mahajanga, le ………………………………', marginX, y);
+
+    y += 8;
+    doc.setFont('times', 'bold');
+    doc.text('Lu et Approuvé,', marginX, y);
+    doc.text("L'Armateur ou son représentant", pageWidth / 2, y, { align: 'center' });
+    doc.text("L'autorité administrative", pageWidth - marginX - 5, y, { align: 'right' });
+
+    y += 5;
+    doc.setFont('times', 'normal');
+    doc.text('Le marin', marginX, y);
+
+    // ── Sauvegarde ─────────────────────────────────────────────────
+    const now = new Date();
+    const pad2 = (n: number) => String(n).padStart(2, '0');
+    const dateStr = `${pad2(now.getDate())}${pad2(now.getMonth() + 1)}${now.getFullYear()}`;
+    const filename = `AE_CONTRAT_${data.nom.toUpperCase()}_${dateStr}_${now.getTime()}.pdf`;
+
+    doc.save(filename);
+
+    await logExport({
+        type: 'liste',          // réutilise le type existant
+        filename,
+        shipName: data.shipName,
+        destination: data.fonction,
+        membersCount: 1,
+        exportedAt: now,
     });
 }

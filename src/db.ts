@@ -17,9 +17,29 @@ export interface CrewMember {
     brevets: string;
     dateNaissance: string;
     lieuNaissance: string;
+    adresse: string;
     telephone: string;
     email: string;
     nationalite: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface Contract {
+    id?: number;
+    crewMemberId: number;
+    shipName: string;
+    immatriculation: string;
+    fonction: string;
+    dateDebut: string;
+    dateFin: string;
+    salaireBaseJournalier: number;
+    forfaitHeuresSupp: number;
+    salaireCongeJournalier: number;
+    indemRNC: number;
+    beneficiaire: string;
+    numCompteBancaire: string;
+    montantDelegation: number;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -85,6 +105,23 @@ export interface AuthConfig {
     updatedAt: Date;
 }
 
+export function computeContractTotals(c: Pick<Contract,
+    'salaireBaseJournalier' | 'forfaitHeuresSupp' |
+    'salaireCongeJournalier' | 'indemRNC'
+>) {
+    const totalSalaireBase = c.salaireBaseJournalier * 30;
+    const totalForfait = c.forfaitHeuresSupp;
+    const totalConge = c.salaireCongeJournalier * 6;
+    const totalRNC = c.indemRNC * 12;
+    const totalGeneral = totalSalaireBase + totalForfait + totalConge + totalRNC;
+    return { totalSalaireBase, totalForfait, totalConge, totalRNC, totalGeneral };
+}
+
+export function isContractActive(c: Pick<Contract, 'dateFin'>): boolean {
+    if (!c.dateFin) return false;
+    return new Date(c.dateFin) >= new Date();
+}
+
 // ─── DB ───────────────────────────────────────────────────────────────────────
 
 class MaritimeDB extends Dexie {
@@ -96,10 +133,11 @@ class MaritimeDB extends Dexie {
     dynamicValues!: Table<DynamicValue>;
     authConfig!: Table<AuthConfig>;
     deviceConfig!: Table<DeviceConfig>;
+    contracts!: Table<Contract>;
 
     constructor() {
         super('MaritimeDB');
-        this.version(6).stores({
+        this.version(7).stores({
             crewMembers: '++id, nom, prenom, fonction, fascicule, nationalite',
             ships: '++id, nom, immatriculation',
             crewLists: '++id, shipId, updatedAt',
@@ -108,6 +146,7 @@ class MaritimeDB extends Dexie {
             dynamicValues: '++id, type, value',
             authConfig: '++id',
             deviceConfig: '++id',
+            contracts: '++id, crewMemberId, dateDebut, dateFin',
         });
     }
 }

@@ -7,8 +7,7 @@ import AutoComplete from '../components/AutoComplete';
 import Input from '../components/Input';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { sortCrewByHierarchy } from '../utils/crewSort';
-import { fmtDate } from '../utils/fmtDate';
+import { fmtDate } from '../utils/fmt';
 
 // ── Formulaire défini HORS du composant parent pour éviter la perte de focus ──
 interface FormProps {
@@ -23,12 +22,17 @@ interface FormProps {
 function emptyForm() {
     return {
         nom: '', prenom: '', fonction: '', fascicule: '', brevets: '',
-        dateNaissance: '', lieuNaissance: '', telephone: '', email: '',
-        nationalite: '',
+        dateNaissance: '', lieuNaissance: '', adresse: '',
+        telephone: '', email: '', nationalite: '',
     };
 }
 
-function MemberForm({ form, setForm, fonctionSuggestions, fasciculeSuggestions, brevetSuggestions, nationSuggestions }: FormProps) {
+// Remplacer le grid complet de MemberForm :
+function MemberForm({
+    form, setForm,
+    fonctionSuggestions, fasciculeSuggestions,
+    brevetSuggestions, nationSuggestions,
+}: FormProps) {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Nom *" value={form.nom}
@@ -46,6 +50,7 @@ function MemberForm({ form, setForm, fonctionSuggestions, fasciculeSuggestions, 
                     onChange={v => setForm(f => ({ ...f, fonction: v }))}
                     suggestions={fonctionSuggestions} placeholder="Fonction..." />
             </div>
+
             <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">
                     Fascicule / LPM *
@@ -65,37 +70,48 @@ function MemberForm({ form, setForm, fonctionSuggestions, fasciculeSuggestions, 
                     placeholder="Ex: STCW - BST - FPFF..." />
             </div>
 
+            <DatePicker label="Date de naissance *" value={form.dateNaissance}
+                onChange={v => setForm(f => ({ ...f, dateNaissance: v }))} />
+
+            <Input label="Lieu de naissance *" value={form.lieuNaissance}
+                onChange={e => setForm(f => ({ ...f, lieuNaissance: e.target.value }))}
+                placeholder="Lieu de naissance" />
+
+            {/* ← Adresse sur toute la largeur */}
+            <div className="col-span-1 sm:col-span-2">
+                <Input label="Adresse *" value={form.adresse}
+                    onChange={e => setForm(f => ({ ...f, adresse: e.target.value }))}
+                    placeholder="Adresse complète" />
+            </div>
+
+            <Input label="Téléphone *" type="tel" value={form.telephone}
+                onChange={e => setForm(f => ({ ...f, telephone: e.target.value }))}
+                placeholder="+261..." />
+
+            <Input label="Email *" type="email" value={form.email}
+                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="email@..." />
+
             <div className="col-span-1 sm:col-span-2">
                 <label className="block text-xs font-medium text-slate-400 mb-1">
                     Nationalité *
                 </label>
-                <AutoComplete
-                    value={form.nationalite}
+                <AutoComplete value={form.nationalite}
                     onChange={v => setForm(f => ({ ...f, nationalite: v }))}
                     suggestions={nationSuggestions}
-                    placeholder="Ex: MALAGASY..."
-                />
+                    placeholder="Ex: MALAGASY..." />
             </div>
-
-            <DatePicker label="Date de naissance *" value={form.dateNaissance}
-                onChange={v => setForm(f => ({ ...f, dateNaissance: v }))} />
-            <Input label="Lieu de naissance *" value={form.lieuNaissance}
-                onChange={e => setForm(f => ({ ...f, lieuNaissance: e.target.value }))}
-                placeholder="Lieu de naissance" />
-            <Input label="Téléphone *" type="tel" value={form.telephone}
-                onChange={e => setForm(f => ({ ...f, telephone: e.target.value }))}
-                placeholder="+261..." />
-            <Input label="Email" type="email" value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                placeholder="email@..." />
         </div>
     );
 }
 
 // ─────────────────────────────────────────────────────────────────────
 export default function CrewPage() {
-    const members = useLiveQuery(() => db.crewMembers.orderBy('nom').toArray()) ?? [];
+    const rawMembers = useLiveQuery(() => db.crewMembers.toArray()) ?? [];
     const dynamicValues = useLiveQuery(() => db.dynamicValues.toArray()) ?? [];
+    const members = [...rawMembers].sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
 
     const [search, setSearch] = useState('');
     const [modal, setModal] = useState<'add' | 'edit' | 'view' | null>(null);
@@ -116,10 +132,8 @@ export default function CrewPage() {
     const getNationSuggestions = () =>
         dynamicValues.filter(v => v.type === 'nationalite').map(v => v.value);
 
-    const filtered = sortCrewByHierarchy(
-        members.filter(m =>
-            `${m.nom} ${m.prenom} ${m.fonction}`.toLowerCase().includes(search.toLowerCase())
-        )
+    const filtered = members.filter(m =>
+        `${m.nom} ${m.prenom} ${m.fonction}`.toLowerCase().includes(search.toLowerCase())
     );
 
     const openAdd = () => { setActive(null); setForm(emptyForm()); setFormError(''); setModal('add'); };
@@ -128,7 +142,7 @@ export default function CrewPage() {
         setForm({
             nom: m.nom, prenom: m.prenom, fonction: m.fonction, fascicule: m.fascicule,
             brevets: m.brevets, dateNaissance: m.dateNaissance, lieuNaissance: m.lieuNaissance,
-            telephone: m.telephone ?? '', email: m.email ?? '', nationalite: 'MALAGASY'
+            adresse: m.adresse ?? '', telephone: m.telephone ?? '', email: m.email ?? '', nationalite: 'MALAGASY',
         });
         setModal('edit'); setFormError(''); setModal('edit');
     };
@@ -145,6 +159,7 @@ export default function CrewPage() {
         if (!form.brevets.trim()) required.brevets = 'Les brevets sont requis';
         if (!form.dateNaissance.trim()) required.dateNaissance = 'La date de naissance est requise';
         if (!form.lieuNaissance.trim()) required.lieuNaissance = 'Le lieu de naissance est requis';
+        if (!form.adresse.trim()) required.adresse = "L'adresse est requise";
         if (!form.telephone.trim()) required.telephone = 'Le téléphone est requis';
         if (!form.nationalite.trim()) required.nationalite = 'La nationalité est requise';
 
@@ -341,6 +356,7 @@ export default function CrewPage() {
                                 ['Fascicule / LPM', active.fascicule],
                                 ['Brevets', active.brevets],
                                 ['Naissance', active.dateNaissance && `${fmtDate(new Date(active.dateNaissance))}${active.lieuNaissance ? ', ' + active.lieuNaissance : ''}`],
+                                ['Adresse', active.adresse],
                                 ['Téléphone', active.telephone],
                                 ['Email', active.email],
                                 ['Nationalité', active.nationalite],

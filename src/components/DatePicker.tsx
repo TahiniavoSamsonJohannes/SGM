@@ -27,6 +27,8 @@ export default function DatePicker({
         return { year: d.getFullYear(), month: d.getMonth() };
     });
     const ref = useRef<HTMLDivElement>(null);
+    const yearListRef = useRef<HTMLDivElement>(null);
+    const selectedYearRef = useRef<HTMLButtonElement>(null);
 
     useEffect(() => {
         const h = (e: MouseEvent) => {
@@ -37,6 +39,19 @@ export default function DatePicker({
         document.addEventListener('mousedown', h);
         return () => document.removeEventListener('mousedown', h);
     }, []);
+
+    // useEffect pour centrer l'année sélectionnée
+    useEffect(() => {
+        if (mode === 'year' && selectedYearRef.current && yearListRef.current) {
+            // Délai minimal pour que le DOM soit rendu
+            setTimeout(() => {
+                selectedYearRef.current?.scrollIntoView({
+                    behavior: 'auto',
+                    block: 'center',
+                });
+            }, 20);
+        }
+    }, [mode]);
 
     const displayValue = parsed
         ? `${String(parsed.getDate()).padStart(2, '0')} ${MONTHS[parsed.getMonth()]} ${parsed.getFullYear()}`
@@ -221,14 +236,15 @@ export default function DatePicker({
                                     Retour
                                 </button>
                             </div>
-                            <div className="max-h-48 overflow-y-auto custom-scroll">
+                            <div ref={yearListRef} className="max-h-48 overflow-y-auto custom-scroll">
                                 <div className="grid grid-cols-3 gap-1">
                                     {years.map(y => (
                                         <button
                                             key={y}
+                                            ref={view.year === y ? selectedYearRef : undefined}  // ← ref sur l'année active
                                             onClick={() => { setView(v => ({ ...v, year: y })); setMode('calendar'); }}
                                             className={`text-xs py-2 rounded-lg transition font-mono
-                        ${view.year === y
+                                            ${view.year === y
                                                     ? 'bg-ocean-600 text-white'
                                                     : 'text-slate-300 hover:bg-navy-600'
                                                 }`}

@@ -66,6 +66,7 @@ export default function DataPage() {
                     checklistDocs: await db.checklistDocs.toArray(),
                     exportedFiles: await db.exportedFiles.toArray(),
                     dynamicValues: await db.dynamicValues.toArray(),
+                    contracts: await db.contracts.toArray(),
                 },
             };
             await downloadJson(data, buildExportFilename('AE_DATA'));
@@ -91,6 +92,7 @@ export default function DataPage() {
                     dynamicValues: await db.dynamicValues.toArray(),
                     authConfig: await db.authConfig.toArray(),
                     deviceConfig: await db.deviceConfig.toArray(),
+                    contracts: await db.contracts.toArray(),
                 },
             };
             await downloadJson(data, buildExportFilename('AE_BACKUP_FULL'));
@@ -121,7 +123,7 @@ export default function DataPage() {
             await db.checklistDocs.clear();
             await db.exportedFiles.clear();
             await db.dynamicValues.clear();
-
+            await db.contracts.clear();
             if (tables.crewMembers?.length)
                 await db.crewMembers.bulkPut(tables.crewMembers);
             if (tables.ships?.length)
@@ -134,6 +136,8 @@ export default function DataPage() {
                 await db.exportedFiles.bulkPut(tables.exportedFiles);
             if (tables.dynamicValues?.length)
                 await db.dynamicValues.bulkPut(tables.dynamicValues);
+            if (tables.contracts?.length)
+                await db.contracts.bulkPut(tables.contracts);
 
             if (isFull) {
                 await db.authConfig.clear();
@@ -169,7 +173,6 @@ export default function DataPage() {
 
     return (
         <div className="space-y-6 fade-in max-w-lg">
-            <h1 className="text-xl font-bold font-display text-white">Données & Sauvegarde</h1>
 
             {/* Stats */}
             <div className="bg-navy-800 border border-navy-600 rounded-xl p-5">

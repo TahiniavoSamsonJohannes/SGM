@@ -16,9 +16,10 @@ type Step = 'email' | 'pin' | 'confirm' | 'machine';
 interface Props {
     onDone: () => void;
     initialStep?: Step;   // permet de démarrer à l'étape machine
+    onHasAccount?: () => void;
 }
 
-export default function SetupFlow({ onDone, initialStep = 'email' }: Props) {
+export default function SetupFlow({ onDone, initialStep = 'email', onHasAccount }: Props) {
     const [step, setStep] = useState<Step>(() => {
         // Restaurer l'étape depuis localStorage si disponible
         return (localStorage.getItem(LS_STEP) as Step) || initialStep;
@@ -70,21 +71,22 @@ export default function SetupFlow({ onDone, initialStep = 'email' }: Props) {
             setError('Adresse email invalide'); return;
         }
         setError('');
-        setStep('pin');
+        setTimeout(() => setStep('pin'), 100);
     };
 
     // ── PIN ──────────────────────────────────────────────────────────────
     const handlePinKey = useCallback(async (k: string) => {
+        if(step === 'email') return;
         setError(''); // effacer l'erreur à chaque frappe
         const isConfirm = step === 'confirm';
         const current = isConfirm ? confirmPin : pin;
         const setter = isConfirm ? setConfirmPin : setPin;
-
+        
         if (k === 'DEL') {
             setter(current.slice(0, -1));
             return;
         }
-
+        
         if (k === 'OK') {
             // Valider uniquement à la soumission
             if (current.length < MAX_PIN) {
@@ -101,7 +103,7 @@ export default function SetupFlow({ onDone, initialStep = 'email' }: Props) {
             // Confirmation
             if (current !== pin) {
                 // Revenir à la création du PIN
-                setError('Les PIN ne correspondent pas — recommencez');
+                setError('Les PIN ne correspondent pas. Recommencez');
                 setPin('');
                 setConfirmPin('');
                 setTimeout(() => setStep('pin'), 800);
@@ -160,7 +162,7 @@ export default function SetupFlow({ onDone, initialStep = 'email' }: Props) {
     };
 
     return (
-        <div className="max-h-screen bg-navy-900 flex items-start justify-center p-4 overflow-y-auto custom-scroll">
+        <div className="min-h-screen bg-navy-900 flex items-center justify-center p-4 pb-safe">
             <div className="w-full max-w-sm bg-navy-800 border border-navy-600
         rounded-2xl shadow-2xl p-6 fade-in">
 
@@ -205,6 +207,17 @@ export default function SetupFlow({ onDone, initialStep = 'email' }: Props) {
                 py-2.5 rounded-lg text-sm font-medium transition">
                             Continuer
                         </button>
+                        {onHasAccount && (
+                            <div className="text-center mt-2">
+                                <button
+                                    onClick={onHasAccount}
+                                    className="text-sm text-ocean-400 hover:text-ocean-300
+        hover:underline transition"
+                                >
+                                    Vous avez déjà un compte ?
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
 

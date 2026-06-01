@@ -25,6 +25,23 @@ body {
   overflow: hidden;
 }
 
+.pb-safe {
+  padding-bottom: 15vh;
+}
+
+/* ── Scrollbar personnalisée — appliquée globalement ── */
+*::-webkit-scrollbar        { width: 5px; height: 5px; }
+*::-webkit-scrollbar-track  { background: var(--navy-900); }
+*::-webkit-scrollbar-thumb  { background: var(--ocean-600); border-radius: 0; }
+*::-webkit-scrollbar-thumb:hover { background: var(--ocean-500); }
+*::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ocean-600) var(--navy-900);
+}
+
 /* ── Scrollbar personnalisée — carrée, sans flèches ─────────── */
 .custom-scroll::-webkit-scrollbar {
   width: 5px;

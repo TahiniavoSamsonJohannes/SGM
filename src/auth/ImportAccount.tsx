@@ -28,7 +28,7 @@ export default function ImportAccount({ onImported, onBack }: Props) {
                 throw new Error("Ce fichier n'est pas une sauvegarde complète (full_backup)");
 
             const { tables } = backup;
-            
+
             await db.crewMembers.clear();
             await db.ships.clear();
             await db.crewLists.clear();

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Users, FileText, CheckSquare,
-  History, UserCircle, LogOut, Menu,
+  History, UserCircle, LogOut, Menu, FileSignature,
 } from 'lucide-react';
 import {
   seedDynamicValues, isFirstLaunch,
@@ -23,6 +23,7 @@ import ChecklistPage from './pages/ChecklistPage';
 import HistoryPage from './pages/HistoryPage';
 import AccountPage from './pages/AccountPage';
 import DataPage from './pages/DataPage';
+import ContractsPage from './pages/ContractsPage';
 
 import logoUrl from './assets/logo-ae.png';
 import ConfirmDialog from './components/ConfirmDialog';
@@ -33,6 +34,7 @@ const TABS = [
   { id: 'ships' as TabId, label: 'Navires', icon: FileText },
   { id: 'crewlists' as TabId, label: "Listes d'équipage", icon: FileText },
   { id: 'checklist' as TabId, label: 'Checklist', icon: CheckSquare },
+  { id: 'contracts' as TabId, label: 'Contrats', icon: FileSignature },
   { id: 'history' as TabId, label: 'Historique exports', icon: History },
   { id: 'account' as TabId, label: 'Mon compte', icon: UserCircle },
 ];
@@ -41,7 +43,8 @@ type AuthState =
   | 'loading'
   | 'setup'
   | 'login'
-  | 'import-account'
+  | 'import-account-from-setup'   // ← depuis SetupFlow
+  | 'import-account-from-login'   // ← depuis LoginPin
   | 'activation'       // retour vers SetupFlow étape machine
   | 'no-subscription'  // connecté mais pas d'abonnement actif
   | 'ok'
@@ -114,7 +117,7 @@ export default function App() {
 
     // Pousser un état initial pour avoir quelque chose à "dépiler"
     //console.log('AddStack');
-    
+
     window.history.pushState(null, '', window.location.href);
     window.addEventListener('popstate', handlePopState);
 
@@ -165,8 +168,15 @@ export default function App() {
     </div>
   );
 
+
   if (authState === 'setup')
-    return <SetupFlow onDone={() => setAuthState('login')} />;
+    return (
+      <SetupFlow
+        onDone={() => setAuthState('login')}
+        initialStep="email"
+        onHasAccount={() => setAuthState('import-account-from-setup')}
+      />
+    );
 
   if (authState === 'activation')
     return (
@@ -176,22 +186,31 @@ export default function App() {
       />
     );
 
+  if (authState === 'import-account-from-setup')
+    return (
+      <ImportAccount
+        onImported={() => setAuthState('login')}
+        onBack={() => setAuthState('setup')}          // ← retour vers SetupFlow
+      />
+    );
+
+  if (authState === 'import-account-from-login')
+    return (
+      <ImportAccount
+        onImported={() => setAuthState('login')}
+        onBack={() => setAuthState('login')}           // ← retour vers LoginPin
+      />
+    );
+
   if (authState === 'login')
     return (
       <LoginPin
         onSuccess={handleLoginSuccess}
-        onImportAccount={() => setAuthState('import-account')}
+        onImportAccount={() => setAuthState('import-account-from-login')}
         onGoToActivation={() => setAuthState('activation')}
       />
     );
 
-  if (authState === 'import-account')
-    return (
-      <ImportAccount
-        onImported={() => setAuthState('login')}
-        onBack={() => setAuthState('login')}
-      />
-    );
 
   if (authState === 'no-subscription')
     return (
@@ -277,7 +296,7 @@ export default function App() {
         </header>
 
         <main className="flex-1 overflow-y-auto custom-scroll">
-          <div className="h-full p-4 sm:p-6 max-w-4xl mx-auto">
+          <div className="p-4 sm:p-6 max-w-4xl mx-auto pb-safe">
             {tab === 'dashboard' && <Dashboard setTab={navigate} />}
             {tab === 'crew' && <CrewPage />}
             {tab === 'ships' && <ShipsPage />}
@@ -295,6 +314,7 @@ export default function App() {
               />
             )}
             {tab === 'checklist' && <ChecklistPage />}
+            {tab === 'contracts' && <ContractsPage />}
             {tab === 'history' && <HistoryPage />}
             {tab === 'account' && <AccountPage />}
             {tab === 'data' && <DataPage />}
