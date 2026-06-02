@@ -1,37 +1,38 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus, Edit3, Trash2, Save, Users, Search } from 'lucide-react';
-import DatePicker from '../components/DatePicker';
-import { db, addOrIncrementDynamic, type CrewMember } from '../db';
+import {
+    db, addOrIncrementDynamic, getMembersFonctions,
+    type CrewMember,
+} from '../db';
 import AutoComplete from '../components/AutoComplete';
 import Input from '../components/Input';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
+import DatePicker from '../components/DatePicker';
 import { fmtDate } from '../utils/fmt';
 
-// ── Formulaire défini HORS du composant parent pour éviter la perte de focus ──
-interface FormProps {
-    form: ReturnType<typeof emptyForm>;
-    setForm: React.Dispatch<React.SetStateAction<ReturnType<typeof emptyForm>>>;
-    fonctionSuggestions: string[];
-    fasciculeSuggestions: string[];
-    brevetSuggestions: string[];
-    nationSuggestions: string[];
-}
-
+// ── emptyForm sans fonction ────────────────────────────────────────
 function emptyForm() {
     return {
-        nom: '', prenom: '', fonction: '', fascicule: '', brevets: '',
+        nom: '', prenom: '', fascicule: '', brevets: '',
         dateNaissance: '', lieuNaissance: '', adresse: '',
         telephone: '', email: '', nationalite: '',
     };
 }
 
-// Remplacer le grid complet de MemberForm :
+interface FormProps {
+    form: ReturnType<typeof emptyForm>;
+    setForm: React.Dispatch<React.SetStateAction<ReturnType<typeof emptyForm>>>;
+    fasciculeSuggestions: string[];
+    brevetSuggestions: string[];
+    nationSuggestions: string[];
+}
+
+// ── MemberForm sans champ fonction ────────────────────────────────
 function MemberForm({
     form, setForm,
-    fonctionSuggestions, fasciculeSuggestions,
-    brevetSuggestions, nationSuggestions,
+    fasciculeSuggestions, brevetSuggestions, nationSuggestions,
 }: FormProps) {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -44,16 +45,7 @@ function MemberForm({
 
             <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">
-                    Fonction *
-                </label>
-                <AutoComplete value={form.fonction}
-                    onChange={v => setForm(f => ({ ...f, fonction: v }))}
-                    suggestions={fonctionSuggestions} placeholder="Fonction..." />
-            </div>
-
-            <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">
-                    Fascicule / LPM *
+                    Fascicule *
                 </label>
                 <AutoComplete value={form.fascicule}
                     onChange={v => setForm(f => ({ ...f, fascicule: v }))}
@@ -72,12 +64,10 @@ function MemberForm({
 
             <DatePicker label="Date de naissance *" value={form.dateNaissance}
                 onChange={v => setForm(f => ({ ...f, dateNaissance: v }))} />
-
             <Input label="Lieu de naissance *" value={form.lieuNaissance}
                 onChange={e => setForm(f => ({ ...f, lieuNaissance: e.target.value }))}
                 placeholder="Lieu de naissance" />
 
-            {/* ← Adresse sur toute la largeur */}
             <div className="col-span-1 sm:col-span-2">
                 <Input label="Adresse *" value={form.adresse}
                     onChange={e => setForm(f => ({ ...f, adresse: e.target.value }))}
@@ -87,7 +77,6 @@ function MemberForm({
             <Input label="Téléphone *" type="tel" value={form.telephone}
                 onChange={e => setForm(f => ({ ...f, telephone: e.target.value }))}
                 placeholder="+261..." />
-
             <Input label="Email *" type="email" value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 placeholder="email@..." />
@@ -105,10 +94,22 @@ function MemberForm({
     );
 }
 
-// ─────────────────────────────────────────────────────────────────────
+// ── Page Équipage ─────────────────────────────────────────────────
 export default function CrewPage() {
     const rawMembers = useLiveQuery(() => db.crewMembers.toArray()) ?? [];
     const dynamicValues = useLiveQuery(() => db.dynamicValues.toArray()) ?? [];
+    const allContracts = useLiveQuery(() => db.contracts.toArray()) ?? [];
+
+    // Fonctions résolues depuis les contrats (map memberId → fonction)
+    const [fonctions, setFonctions] = useState<Record<number, string>>({});
+
+    useEffect(() => {
+        if (rawMembers.length === 0) return;
+        const ids = rawMembers.map(m => m.id!).filter(Boolean);
+        getMembersFonctions(ids).then(setFonctions);
+    }, [rawMembers, allContracts]);
+
+    // Tri décroissant par createdAt
     const members = [...rawMembers].sort(
         (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
@@ -117,207 +118,179 @@ export default function CrewPage() {
     const [modal, setModal] = useState<'add' | 'edit' | 'view' | null>(null);
     const [active, setActive] = useState<CrewMember | null>(null);
     const [form, setForm] = useState(emptyForm());
-    const [deleting, setDeleting] = useState<CrewMember | null>(null);
     const [formError, setFormError] = useState('');
+    const [deleting, setDeleting] = useState<CrewMember | null>(null);
 
-    const confirmDelete = async () => {
-        if (deleting?.id) await db.crewMembers.delete(deleting.id);
-        setDeleting(null);
-    };
-
-    const getSuggestions = (type: 'fonction' | 'fascicule' | 'brevet') =>
+    const getSuggestions = (type: 'fascicule' | 'brevet' | 'nationalite') =>
         dynamicValues.filter(v => v.type === type).map(v => v.value);
 
-    // Ajouter dans les getSuggestions :
-    const getNationSuggestions = () =>
-        dynamicValues.filter(v => v.type === 'nationalite').map(v => v.value);
-
-    const filtered = members.filter(m =>
-        `${m.nom} ${m.prenom} ${m.fonction}`.toLowerCase().includes(search.toLowerCase())
-    );
-
-    const openAdd = () => { setActive(null); setForm(emptyForm()); setFormError(''); setModal('add'); };
+    const openAdd = () => {
+        setActive(null); setForm(emptyForm()); setFormError(''); setModal('add');
+    };
     const openEdit = (m: CrewMember) => {
         setActive(m);
         setForm({
-            nom: m.nom, prenom: m.prenom, fonction: m.fonction, fascicule: m.fascicule,
-            brevets: m.brevets, dateNaissance: m.dateNaissance, lieuNaissance: m.lieuNaissance,
-            adresse: m.adresse ?? '', telephone: m.telephone ?? '', email: m.email ?? '', nationalite: 'MALAGASY',
+            nom: m.nom, prenom: m.prenom,
+            fascicule: m.fascicule, brevets: m.brevets,
+            dateNaissance: m.dateNaissance, lieuNaissance: m.lieuNaissance,
+            adresse: m.adresse ?? '',
+            telephone: m.telephone ?? '', email: m.email ?? '',
+            nationalite: m.nationalite ?? '',
         });
-        setModal('edit'); setFormError(''); setModal('edit');
+        setFormError(''); setModal('edit');
     };
-
     const openView = (m: CrewMember) => { setActive(m); setModal('view'); };
 
     const save = async () => {
-        // ── Validation champs requis ─────────────────────────────────────
+        // Validation
         const required: Record<string, string> = {};
-        if (!form.nom.trim()) required.nom = 'Le nom est requis';
-        if (!form.prenom.trim()) required.prenom = 'Le prénom est requis';
-        if (!form.fonction.trim()) required.fonction = 'La fonction est requise';
-        if (!form.fascicule.trim()) required.fascicule = 'Le fascicule / LPM est requis';
-        if (!form.brevets.trim()) required.brevets = 'Les brevets sont requis';
-        if (!form.dateNaissance.trim()) required.dateNaissance = 'La date de naissance est requise';
-        if (!form.lieuNaissance.trim()) required.lieuNaissance = 'Le lieu de naissance est requis';
-        if (!form.adresse.trim()) required.adresse = "L'adresse est requise";
-        if (!form.telephone.trim()) required.telephone = 'Le téléphone est requis';
-        if (!form.nationalite.trim()) required.nationalite = 'La nationalité est requise';
+        if (!form.nom.trim()) required.nom = 'Nom requis';
+        if (!form.prenom.trim()) required.prenom = 'Prénom requis';
+        if (!form.fascicule.trim()) required.fascicule = 'Fascicule requis';
+        if (!form.brevets.trim()) required.brevets = 'Brevets requis';
+        if (!form.dateNaissance) required.ddn = 'Date de naissance requise';
+        if (!form.lieuNaissance.trim()) required.lieu = 'Lieu de naissance requis';
+        if (!form.adresse.trim()) required.adresse = 'Adresse requise';
+        if (!form.telephone.trim()) required.tel = 'Téléphone requis';
+        if (!form.email.trim()) required.email = 'Email requis';
+        if (!form.nationalite.trim()) required.nat = 'Nationalité requise';
 
         if (Object.keys(required).length > 0) {
-            // Afficher la première erreur rencontrée
             setFormError(Object.values(required)[0]);
             return;
         }
 
-        // ── Vérifications d'unicité ──────────────────────────────────────
-        const editingId = (modal === 'edit' && active?.id) ? active.id : null;
+        const editId = modal === 'edit' && active?.id ? active.id : null;
 
-        // 1. Nom + prénom identiques
-        const sameNameExists = await db.crewMembers
-            .filter(m =>
-                m.nom.toUpperCase() === form.nom.toUpperCase().trim() &&
-                m.prenom.toUpperCase() === form.prenom.toUpperCase().trim() &&
-                m.id !== editingId
-            ).count();
-        if (sameNameExists > 0) {
-            setFormError('Un membre avec ce nom et prénom existe déjà.');
-            return;
-        }
+        // Unicité
+        const sameNameExists = await db.crewMembers.filter(m =>
+            m.nom.toUpperCase() === form.nom.toUpperCase().trim() &&
+            m.prenom.toUpperCase() === form.prenom.toUpperCase().trim() &&
+            m.id !== editId
+        ).count();
+        if (sameNameExists > 0) { setFormError('Ce membre existe déjà.'); return; }
 
-        // 2. Fascicule
-        if (form.fascicule.trim()) {
-            const sameFascicule = await db.crewMembers
-                .filter(m =>
-                    m.fascicule.trim() === form.fascicule.trim() &&
-                    m.id !== editingId
-                ).count();
-            if (sameFascicule > 0) {
-                setFormError('Ce numéro de fascicule est déjà utilisé.');
-                return;
-            }
-        }
+        const sameFascicule = await db.crewMembers.filter(m =>
+            m.fascicule.trim() === form.fascicule.trim() && m.id !== editId
+        ).count();
+        if (sameFascicule > 0) { setFormError('Ce fascicule est déjà utilisé.'); return; }
 
-        // 3. Email
         if (form.email.trim()) {
-            const sameEmail = await db.crewMembers
-                .filter(m =>
-                    m.email.trim().toLowerCase() === form.email.trim().toLowerCase() &&
-                    m.id !== editingId
-                ).count();
-            if (sameEmail > 0) {
-                setFormError('Cet email est déjà utilisé par un autre membre.');
-                return;
-            }
+            const sameEmail = await db.crewMembers.filter(m =>
+                m.email.trim().toLowerCase() === form.email.trim().toLowerCase() &&
+                m.id !== editId
+            ).count();
+            if (sameEmail > 0) { setFormError('Cet email est déjà utilisé.'); return; }
         }
 
-        // 4. Téléphone
-        if (form.telephone.trim()) {
-            const samePhone = await db.crewMembers
-                .filter(m =>
-                    m.telephone.trim() === form.telephone.trim() &&
-                    m.id !== editingId
-                ).count();
-            if (samePhone > 0) {
-                setFormError('Ce numéro de téléphone est déjà utilisé par un autre membre.');
-                return;
-            }
-        }
-
-        // ── Sauvegarde ───────────────────────────────────────────────────
-        await addOrIncrementDynamic('fonction', form.fonction);
         await addOrIncrementDynamic('fascicule', form.fascicule);
+        await addOrIncrementDynamic('brevet', form.brevets);
         await addOrIncrementDynamic('nationalite', form.nationalite);
-        if (form.brevets) await addOrIncrementDynamic('brevet', form.brevets);
 
-        if (modal === 'edit' && active?.id) {
-            await db.crewMembers.update(active.id, { ...form, updatedAt: new Date() });
+        const now = new Date();
+        if (editId) {
+            await db.crewMembers.update(editId, { ...form, updatedAt: now });
         } else {
-            await db.crewMembers.add({ ...form, createdAt: new Date(), updatedAt: new Date() });
+            await db.crewMembers.add({ ...form, createdAt: now, updatedAt: now });
         }
         setFormError('');
         setModal(null);
     };
 
+    const del = async (id: number) => {
+        await db.crewMembers.delete(id);
+        setDeleting(null);
+    };
+
+    const filtered = members.filter(m =>
+        `${m.nom} ${m.prenom} ${fonctions[m.id!] ?? ''}`
+            .toLowerCase().includes(search.toLowerCase())
+    );
+
     return (
-        <div className="h-full flex flex-col gap-4 fade-in overflow-hidden">
-            {/* En-tête fixe */}
+        <div className="h-full flex flex-col gap-4 overflow-hidden fade-in">
+
+            {/* En-tête */}
             <div className="flex items-center justify-between flex-shrink-0">
                 <h1 className="text-xl font-bold font-display text-white">
                     Membres d'équipage
                 </h1>
                 <button onClick={openAdd}
                     className="flex items-center gap-2 bg-ocean-600 hover:bg-ocean-500
-          text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+            text-white px-4 py-2 rounded-lg text-sm font-medium transition">
                     <Plus size={16} /> Ajouter
                 </button>
             </div>
 
-            {/* Barre de recherche fixe */}
+            {/* Recherche */}
             <div className="relative flex-shrink-0">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <Search size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                 <input value={search} onChange={e => setSearch(e.target.value)}
-                    placeholder="Rechercher par nom, fonction..."
-                    className="w-full bg-navy-800 border border-navy-600 rounded-lg pl-9 pr-3
-          py-2 text-sm text-slate-200 placeholder-slate-500
-          focus:outline-none focus:border-ocean-500 transition" />
+                    placeholder="Rechercher par nom, fascicule..."
+                    className="w-full bg-navy-800 border border-navy-600 rounded-lg
+            pl-9 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500
+            focus:outline-none focus:border-ocean-500 transition" />
             </div>
 
-            {/* Liste scrollable — touche le bas de l'écran */}
-            <div className="flex-1 overflow-y-auto custom-scroll min-h-0 space-y-2 pb-4">
+            {/* Liste scrollable */}
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scroll space-y-2 pb-4">
                 {filtered.length === 0 ? (
                     <div className="bg-navy-800 border border-dashed border-navy-600
-          rounded-xl p-10 text-center text-slate-500">
+            rounded-xl p-10 text-center text-slate-500">
                         <Users size={28} className="mx-auto mb-3 opacity-40" />
                         <p className="text-sm">Aucun membre trouvé</p>
                     </div>
-                ) : filtered.map(m => (
-                    <div key={m.id} onClick={() => openView(m)}
-                        className="bg-navy-800 border border-navy-600 rounded-xl p-4
-            flex items-center justify-between hover:border-navy-500
-            transition cursor-pointer">
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-9 h-9 rounded-full bg-ocean-600/20 border border-ocean-600/30 flex items-center justify-center text-ocean-400 font-bold text-sm flex-shrink-0">
-                                {m.nom[0]}{m.prenom[0]}
+                ) : filtered.map(m => {
+                    const fonction = fonctions[m.id!] ? fonctions[m.id!] : '';
+                    return (
+                        <div key={m.id} onClick={() => openView(m)}
+                            className="bg-navy-800 border border-navy-600 rounded-xl p-4
+                flex items-center justify-between hover:border-navy-500
+                transition cursor-pointer">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-9 h-9 rounded-full bg-ocean-600/20
+                  border border-ocean-600/30 flex items-center justify-center
+                  text-ocean-400 font-bold text-sm flex-shrink-0">
+                                    {m.nom[0]}{m.prenom[0]}
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="font-semibold text-slate-200 text-sm truncate">
+                                        {m.nom.toUpperCase()} {m.prenom}
+                                    </div>
+                                    <div className="text-xs text-slate-500 truncate">
+                                        {fonction} · Fasc. {m.fascicule}
+                                    </div>
+                                </div>
                             </div>
-                            <div className="min-w-0">
-                                <div className="font-semibold text-slate-200 text-sm truncate">
-                                    {m.nom.toUpperCase()} {m.prenom}
-                                </div>
-                                <div className="text-xs text-slate-500 truncate">
-                                    {m.fonction} · {m.fascicule} · {m.nationalite}
-                                </div>
+                            <div className="flex gap-2 flex-shrink-0 ml-2"
+                                onClick={e => e.stopPropagation()}>
+                                <button onClick={() => openEdit(m)}
+                                    className="text-slate-400 hover:text-ocean-400 transition p-1">
+                                    <Edit3 size={15} />
+                                </button>
+                                <button onClick={() => setDeleting(m)}
+                                    className="text-slate-400 hover:text-rose-400 transition p-1">
+                                    <Trash2 size={15} />
+                                </button>
                             </div>
                         </div>
-                        <div className="flex gap-2 flex-shrink-0 ml-2" onClick={e => e.stopPropagation()}>
-                            <button onClick={() => openEdit(m)}
-                                className="text-slate-400 hover:text-ocean-400 transition p-1">
-                                <Edit3 size={15} />
-                            </button>
-                            <button onClick={() => setDeleting(m)}
-                                className="text-slate-400 hover:text-rose-400 transition p-1">
-                                <Trash2 size={15} />
-                            </button>
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
-            {/* Modal ajout / édition */}
-            <Modal
-                open={modal === 'add' || modal === 'edit'}
-                onClose={() => setModal(null)}
-                title={modal === 'edit' ? 'Modifier le membre' : 'Nouveau membre'}
-            >
+            {/* Modal ajout/édition */}
+            <Modal open={modal === 'add' || modal === 'edit'} onClose={() => setModal(null)}
+                title={modal === 'edit' ? 'Modifier le membre' : 'Nouveau membre'}>
                 <MemberForm
                     form={form} setForm={setForm}
-                    fonctionSuggestions={getSuggestions('fonction')}
                     fasciculeSuggestions={getSuggestions('fascicule')}
                     brevetSuggestions={getSuggestions('brevet')}
-                    nationSuggestions={getNationSuggestions()}
+                    nationSuggestions={getSuggestions('nationalite')}
                 />
                 {formError && (
                     <p className="text-rose-400 text-xs mt-4 p-3 bg-rose-500/10
-    border border-rose-500/30 rounded-lg">
+            border border-rose-500/20 rounded-lg">
                         {formError}
                     </p>
                 )}
@@ -327,8 +300,8 @@ export default function CrewPage() {
                         Annuler
                     </button>
                     <button onClick={save}
-                        className="flex items-center gap-2 bg-ocean-600 hover:bg-ocean-500 text-white
-              px-5 py-2 rounded-lg text-sm font-medium transition">
+                        className="flex items-center gap-2 bg-ocean-600 hover:bg-ocean-500
+              text-white px-5 py-2 rounded-lg text-sm font-medium transition">
                         <Save size={15} /> Enregistrer
                     </button>
                 </div>
@@ -340,38 +313,48 @@ export default function CrewPage() {
                 {active && (
                     <div className="space-y-4">
                         <div className="flex items-center gap-4">
-                            <div className="w-14 h-14 rounded-full bg-ocean-600/20 border border-ocean-600/30
-                flex items-center justify-center text-ocean-400 font-bold text-xl flex-shrink-0">
+                            <div className="w-14 h-14 rounded-full bg-ocean-600/20
+                border border-ocean-600/30 flex items-center justify-center
+                text-ocean-400 font-bold text-xl flex-shrink-0">
                                 {active.nom[0]}{active.prenom[0]}
                             </div>
                             <div>
                                 <div className="text-lg font-bold text-white">
                                     {active.nom.toUpperCase()} {active.prenom}
                                 </div>
-                                <div className="text-sm text-ocean-400">{active.fonction}</div>
+                                <div className="text-sm text-ocean-400">
+                                    {fonctions[active.id!] ? fonctions[active.id!] : '—'}
+                                </div>
                             </div>
                         </div>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                             {([
-                                ['Fascicule / LPM', active.fascicule],
+                                ['Fascicule', active.fascicule],
                                 ['Brevets', active.brevets],
-                                ['Naissance', active.dateNaissance && `${fmtDate(new Date(active.dateNaissance))}${active.lieuNaissance ? ', ' + active.lieuNaissance : ''}`],
+                                ['Nationalité', active.nationalite],
+                                ['Naissance', active.dateNaissance
+                                    ? `${fmtDate(new Date(active.dateNaissance))}${active.lieuNaissance ? ', ' + active.lieuNaissance : ''}`
+                                    : ''],
                                 ['Adresse', active.adresse],
                                 ['Téléphone', active.telephone],
                                 ['Email', active.email],
-                                ['Nationalité', active.nationalite],
-                            ] as [string, string][]).filter(([, v]) => v).map(([label, value]) => (
-                                <div key={label} className="bg-navy-700 rounded-lg p-3">
-                                    <div className="text-xs text-slate-500 mb-1">{label}</div>
-                                    <div className="text-slate-200 text-sm">{value}</div>
-                                </div>
-                            ))}
+                            ] as [string, string][])
+                                .filter(([, v]) => v)
+                                .map(([label, value]) => (
+                                    <div key={label} className="bg-navy-700 rounded-lg p-3">
+                                        <div className="text-xs text-slate-500 mb-1">{label}</div>
+                                        <div className="text-slate-200 text-sm break-words">{value}</div>
+                                    </div>
+                                ))
+                            }
                         </div>
+
                         <div className="flex justify-end">
                             <button
                                 onClick={() => { setModal(null); setTimeout(() => openEdit(active), 80); }}
-                                className="flex items-center gap-2 bg-navy-700 hover:bg-navy-600 text-white
-                  px-4 py-2 rounded-lg text-sm border border-navy-500 transition">
+                                className="flex items-center gap-2 bg-navy-700 hover:bg-navy-600
+                  text-white px-4 py-2 rounded-lg text-sm border border-navy-500 transition">
                                 <Edit3 size={14} /> Modifier
                             </button>
                         </div>
@@ -379,14 +362,13 @@ export default function CrewPage() {
                 )}
             </Modal>
 
-            {/* ── Confirmation suppression ── */}
+            {/* Confirmation suppression */}
             <ConfirmDialog
                 open={!!deleting}
-                title="Supprimer la liste"
-                message={`Supprimer "${deleting?.nom.toUpperCase()} ${deleting?.prenom}" ? Cette action est irréversible.`}
-                confirmLabel="Supprimer"
-                danger
-                onConfirm={confirmDelete}
+                title="Supprimer le membre"
+                message={`Supprimer ${deleting?.nom} ${deleting?.prenom} ? Cette action est irréversible.`}
+                confirmLabel="Supprimer" danger
+                onConfirm={() => deleting?.id && del(deleting.id)}
                 onCancel={() => setDeleting(null)}
             />
         </div>

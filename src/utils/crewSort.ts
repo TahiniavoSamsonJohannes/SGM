@@ -18,7 +18,15 @@ export const FONCTION_ORDER: string[] = [
  */
 export function getFonctionRank(fonction: string): number {
     const normalized = fonction.toUpperCase().trim();
-    const index = FONCTION_ORDER.findIndex(f => normalized.includes(f) || f.includes(normalized));
+
+    if (!normalized) {
+        return FONCTION_ORDER.length;
+    }
+
+    const index = FONCTION_ORDER.findIndex(
+        f => normalized.includes(f) || f.includes(normalized)
+    );
+
     return index === -1 ? FONCTION_ORDER.length : index;
 }
 
@@ -26,14 +34,15 @@ export function getFonctionRank(fonction: string): number {
  * Trie un tableau de membres selon la hiérarchie des fonctions.
  * Les membres avec la même fonction sont triés alphabétiquement par nom.
  */
-export function sortCrewByHierarchy<T extends { fonction: string; nom: string; prenom: string }>(
-    members: T[]
-): T[] {
+export function sortCrewByHierarchy<T extends {
+    fonction?: string;
+    nom: string;
+    prenom: string;
+}>(members: T[]): T[] {
     return [...members].sort((a, b) => {
-        const rankA = getFonctionRank(a.fonction);
-        const rankB = getFonctionRank(b.fonction);
+        const rankA = getFonctionRank(a.fonction ?? '');
+        const rankB = getFonctionRank(b.fonction ?? '');
         if (rankA !== rankB) return rankA - rankB;
-        // Même rang → tri alphabétique
         const nameA = `${a.nom} ${a.prenom}`.toUpperCase();
         const nameB = `${b.nom} ${b.prenom}`.toUpperCase();
         return nameA.localeCompare(nameB);

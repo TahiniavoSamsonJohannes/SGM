@@ -12,7 +12,6 @@ import type { TabId } from './types';
 import SetupFlow from './auth/SetupFlow';
 import LoginPin from './auth/LoginPin';
 import ImportAccount from './auth/ImportAccount';
-import SubscriptionExpired from './auth/SubscriptionExpired';
 
 import Dashboard from './pages/Dashboard';
 import CrewPage from './pages/CrewPage';
@@ -27,6 +26,7 @@ import ContractsPage from './pages/ContractsPage';
 
 import logoUrl from './assets/logo-ae.png';
 import ConfirmDialog from './components/ConfirmDialog';
+import ActivationPage from './pages/ActivationPage';
 
 const TABS = [
   { id: 'dashboard' as TabId, label: 'Tableau de bord', icon: LayoutDashboard },
@@ -45,8 +45,7 @@ type AuthState =
   | 'login'
   | 'import-account-from-setup'   // ← depuis SetupFlow
   | 'import-account-from-login'   // ← depuis LoginPin
-  | 'activation'       // retour vers SetupFlow étape machine
-  | 'no-subscription'  // connecté mais pas d'abonnement actif
+  | 'activation'
   | 'ok'
   | 'logging-out';
 
@@ -78,7 +77,8 @@ export default function App() {
           setTab('dashboard');
           setAuthState('ok');
         } else {
-          setAuthState('no-subscription');
+          sessionStorage.removeItem(SESSION_KEY);
+          setAuthState('activation');
         }
         return;
       }
@@ -133,7 +133,8 @@ export default function App() {
       sessionStorage.setItem(SESSION_KEY, 'true');
       setTimeout(() => setAuthState('ok'), 0);
     } else {
-      setTimeout(() => setAuthState('no-subscription'), 0);
+      sessionStorage.removeItem(SESSION_KEY);
+      setTimeout(() => setAuthState('activation'), 0);
     }
   };
 
@@ -144,7 +145,7 @@ export default function App() {
     setSidebarOpen(false);
     setAuthState('logging-out');
     setShowExitConfirm(false);
-    setTimeout(() => { setTab('dashboard'); setAuthState('login'); }, 500);
+    setTimeout(() => { setTab('dashboard'); setAuthState('login'); }, 2000);
   };
 
   const navigate = (id: TabId) => {
@@ -168,21 +169,19 @@ export default function App() {
     </div>
   );
 
-
   if (authState === 'setup')
     return (
       <SetupFlow
-        onDone={() => setAuthState('login')}
-        initialStep="email"
+        onAccountCreated={() => setAuthState('activation')}
         onHasAccount={() => setAuthState('import-account-from-setup')}
       />
     );
 
   if (authState === 'activation')
     return (
-      <SetupFlow
+      <ActivationPage
         onDone={() => setAuthState('login')}
-        initialStep="machine"
+        onGoToLogin={() => setAuthState('login')}
       />
     );
 
@@ -208,15 +207,6 @@ export default function App() {
         onSuccess={handleLoginSuccess}
         onImportAccount={() => setAuthState('import-account-from-login')}
         onGoToActivation={() => setAuthState('activation')}
-      />
-    );
-
-
-  if (authState === 'no-subscription')
-    return (
-      <SubscriptionExpired
-        onActivated={() => setAuthState('ok')}
-        onLogout={handleLogout}
       />
     );
 

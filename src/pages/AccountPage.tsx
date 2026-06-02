@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
     KeyRound, ShieldCheck, User, ChevronRight,
@@ -19,9 +19,20 @@ import DataPage from './DataPage';
 export default function AccountPage() {
     const [subPage, setSubPage] = useState<SubPage>('main');
     const config = useLiveQuery(() => db.authConfig.toCollection().first());
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    // Scroller vers le haut à chaque changement de sous-page
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = 0;
+        }
+        // Aussi scroller le conteneur parent (main)
+        const main = document.querySelector('main');
+        if (main) main.scrollTop = 0;
+    }, [subPage]);
 
     const subLabel: Record<string, string> = {
-        test: 'Test (5 minutes)',
+        test: 'Test (5 min)',
         monthly: '1 mois',
         yearly: '1 an',
     };
@@ -61,7 +72,7 @@ export default function AccountPage() {
 
     // ── Page principale Mon compte ────────────────────────────────────
     return (
-        <div className="space-y-5 fade-in max-w-lg">
+        <div ref={scrollRef} className="space-y-5 fade-in max-w-lg">
             <h1 className="text-xl font-bold font-display text-white">Mon compte</h1>
 
             {/* Infos compte */}

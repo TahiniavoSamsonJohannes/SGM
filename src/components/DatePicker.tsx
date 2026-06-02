@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, ChevronDown } from 'lucide-react';
+import { fmtDate } from '../utils/fmt';
 
 interface Props {
     label?: string;
@@ -12,7 +13,11 @@ const MONTHS = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
     'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ];
-const DAYS_SHORT = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'];
+const MONTHS_SHORT = [
+    'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
+    'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.',
+];
+const DAYS_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 type PickerMode = 'calendar' | 'month' | 'year';
 
@@ -29,6 +34,8 @@ export default function DatePicker({
     const ref = useRef<HTMLDivElement>(null);
     const yearListRef = useRef<HTMLDivElement>(null);
     const selectedYearRef = useRef<HTMLButtonElement>(null);
+    const [alignRight, setAlignRight] = useState(false);
+    const buttonRef = useRef<HTMLButtonElement>(null);
 
     useEffect(() => {
         const h = (e: MouseEvent) => {
@@ -44,17 +51,30 @@ export default function DatePicker({
     useEffect(() => {
         if (mode === 'year' && selectedYearRef.current && yearListRef.current) {
             // Délai minimal pour que le DOM soit rendu
-            setTimeout(() => {
-                selectedYearRef.current?.scrollIntoView({
-                    behavior: 'auto',
-                    block: 'center',
-                });
-            }, 20);
+            selectedYearRef.current?.scrollIntoView({
+                behavior: 'auto',
+                block: 'center',
+            });
         }
     }, [mode]);
 
+    useEffect(() => {
+        if (!open || !buttonRef.current) return;
+
+        const rect = buttonRef.current.getBoundingClientRect();
+
+        const CALENDAR_WIDTH = 256; // w-64 = 16rem = 256px
+
+        const overflowRight = rect.left + CALENDAR_WIDTH > window.innerWidth;
+
+        setAlignRight(overflowRight);
+    }, [open]);
+
+    // const displayValue = parsed
+    //     ? `${String(parsed.getDate()).padStart(2, '0')} ${MONTHS[parsed.getMonth()]} ${parsed.getFullYear()}`
+    //     : '';
     const displayValue = parsed
-        ? `${String(parsed.getDate()).padStart(2, '0')} ${MONTHS[parsed.getMonth()]} ${parsed.getFullYear()}`
+        ? fmtDate(parsed)
         : '';
 
     // Grille calendrier
@@ -91,6 +111,7 @@ export default function DatePicker({
             )}
 
             <button
+                ref={buttonRef}
                 type="button"
                 onClick={() => { setOpen(o => !o); setMode('calendar'); }}
                 className="w-full bg-navy-800 border border-navy-600 rounded-lg px-3 py-2
@@ -104,8 +125,11 @@ export default function DatePicker({
             </button>
 
             {open && (
-                <div className="absolute z-50 mt-1 bg-navy-700 border border-navy-500
-          rounded-xl shadow-2xl p-3 w-64 slide-down">
+                <div
+                    className={`absolute z-50 mt-1 bg-navy-700 border border-navy-500
+                    rounded-xl shadow-2xl p-3 w-64 slide-down
+                    ${alignRight ? 'right-0' : 'left-0'}`}
+                >
 
                     {/* ── Mode calendrier ── */}
                     {mode === 'calendar' && (
@@ -217,7 +241,7 @@ export default function DatePicker({
                                                 : 'text-slate-300 hover:bg-navy-600'
                                             }`}
                                     >
-                                        {m.slice(0, 3)}
+                                        {MONTHS_SHORT[i]}
                                     </button>
                                 ))}
                             </div>

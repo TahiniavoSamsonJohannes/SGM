@@ -12,7 +12,6 @@ export interface CrewMember {
     id?: number;
     nom: string;
     prenom: string;
-    fonction: string;
     fascicule: string;
     brevets: string;
     dateNaissance: string;
@@ -37,6 +36,10 @@ export interface Contract {
     forfaitHeuresSupp: number;
     salaireCongeJournalier: number;
     indemRNC: number;
+    totalSalaireBase: number;
+    totalForfait: number;
+    totalConge: number;
+    totalRNC: number;
     beneficiaire: string;
     numCompteBancaire: string;
     montantDelegation: number;
@@ -105,16 +108,25 @@ export interface AuthConfig {
     updatedAt: Date;
 }
 
-export function computeContractTotals(c: Pick<Contract,
-    'salaireBaseJournalier' | 'forfaitHeuresSupp' |
-    'salaireCongeJournalier' | 'indemRNC'
->) {
-    const totalSalaireBase = c.salaireBaseJournalier * 30;
-    const totalForfait = c.forfaitHeuresSupp;
-    const totalConge = c.salaireCongeJournalier * 6;
-    const totalRNC = c.indemRNC * 12;
-    const totalGeneral = totalSalaireBase + totalForfait + totalConge + totalRNC;
-    return { totalSalaireBase, totalForfait, totalConge, totalRNC, totalGeneral };
+export function computeContractTotals(c: {
+    totalSalaireBase: number;
+    totalForfait: number;
+    totalConge: number;
+    totalRNC: number;
+}) {
+    const totalGeneral =
+        (c.totalSalaireBase ?? 0) +
+        (c.totalForfait ?? 0) +
+        (c.totalConge ?? 0) +
+        (c.totalRNC ?? 0);
+
+    return {
+        totalSalaireBase: c.totalSalaireBase ?? 0,
+        totalForfait: c.totalForfait ?? 0,
+        totalConge: c.totalConge ?? 0,
+        totalRNC: c.totalRNC ?? 0,
+        totalGeneral,
+    };
 }
 
 export function isContractActive(c: Pick<Contract, 'dateFin'>): boolean {
@@ -137,8 +149,8 @@ class MaritimeDB extends Dexie {
 
     constructor() {
         super('MaritimeDB');
-        this.version(7).stores({
-            crewMembers: '++id, nom, prenom, fonction, fascicule, nationalite',
+        this.version(9).stores({
+            crewMembers: '++id, nom, prenom, fascicule, nationalite',
             ships: '++id, nom, immatriculation',
             crewLists: '++id, shipId, updatedAt',
             checklistDocs: '++id, crewListId, createdAt',
@@ -340,6 +352,7 @@ export interface SubscriptionCodePayload {
     type: 'SUBSCRIPTION_CODE';
     // données du MACHINE_CODE
     email: string;
+    deviceId: string;
     userAgent: string;
     language: string;
     timezone: string;
@@ -364,6 +377,58 @@ export function decodeSubscriptionCode(
     }
 }
 
+// Fonction depuis le dernier contrat
+export async function getMemberFonction(memberId: number): Promise<string> {
+    const contracts = await db.contracts
+        .where('crewMemberId').equals(memberId)
+        .toArray();
+    if (contracts.length === 0) return '';
+    const latest = contracts.sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    )[0];
+    return latest.fonction || '';
+}
+
+export async function getMembersFonctions(
+    memberIds: number[]
+): Promise<Record<number, string>> {
+    const all = await db.contracts
+        .where('crewMemberId').anyOf(memberIds)
+        .toArray();
+
+    const result: Record<number, string> = {};
+    memberIds.forEach(id => {
+        const memberContracts = all
+            .filter(c => c.crewMemberId === id)
+            .sort((a, b) =>
+                new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+            );
+        result[id] = memberContracts[0]?.fonction || '';
+    });
+    return result;
+}
+
+export interface CrewMemberWithFonction extends CrewMember {
+    fonction: string;
+}
+
+export async function enrichMembersWithFonction(
+    members: CrewMember[]
+): Promise<CrewMemberWithFonction[]> {
+    const ids = members
+        .map(m => m.id)
+        .filter((id): id is number => id !== undefined);
+
+    const fonctions = await getMembersFonctions(ids);
+
+    return members.map(member => ({
+        ...member,
+        fonction: member.id
+            ? (fonctions[member.id] ?? '')
+            : '',
+    }));
+}
+
 export async function activateSubscription(
     subCode: string
 ): Promise<{ ok: boolean; type?: SubDuration; message?: string }> {
@@ -371,17 +436,27 @@ export async function activateSubscription(
     if (!config?.id) return { ok: false, message: 'Compte introuvable' };
 
     const payload = decodeSubscriptionCode(subCode);
-    if (!payload) return { ok: false, message: 'Code d\'abonnement invalide' };
+    if (!payload) return { ok: false, message: "Code d'abonnement invalide" };
 
-    // Vérifier que l'email correspond
+    // Vérifier email
     if (payload.email !== config.email)
-        return { ok: false, message: 'Ce code ne correspond pas à votre compte' };
+        return { ok: false, message: "Code d'abonnement invalide" };
+
+    // Vérifier Device ID
+    const deviceId = await getOrCreateDeviceId();
+    if (payload.deviceId && payload.deviceId !== deviceId)
+        return { ok: false, message: "Code d'abonnement invalide" };
+
+    // Vérifier que l'abonnement n'est pas déjà expiré
+    const endDate = new Date(payload.endDate);
+    if (endDate < new Date())
+        return { ok: false, message: "Code d'abonnement expiré" };
 
     await db.authConfig.update(config.id, {
         subscriptionCode: subCode,
         subscriptionType: payload.duration,
         subscriptionStart: new Date(payload.startDate),
-        subscriptionEnd: new Date(payload.endDate),
+        subscriptionEnd: endDate,
         updatedAt: new Date(),
     });
 

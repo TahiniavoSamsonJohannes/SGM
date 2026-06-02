@@ -137,7 +137,7 @@ export default function ImportAccount({ onImported, onBack }: Props) {
                         className="mt-6 w-full flex items-center justify-center gap-2
               text-slate-500 hover:text-slate-300 text-sm transition"
                     >
-                        <ArrowLeft size={14} /> Retour à la connexion
+                        <ArrowLeft size={14} /> Retour
                     </button>
                 )}
             </div>

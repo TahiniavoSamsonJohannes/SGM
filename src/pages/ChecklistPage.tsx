@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Download, Hash } from 'lucide-react';
-import { db } from '../db';
+import { Download } from 'lucide-react';
+import { db, enrichMembersWithFonction, type CrewMemberWithFonction } from '../db';
 import { generateChecklistPDF } from '../pdfGenerator';
 import AutoComplete from '../components/AutoComplete';
+import { sortCrewByHierarchy } from '../utils/crewSort';
 
 // Formate l'id en 10 chiffres
 function formatId(id: number | undefined): string {
@@ -17,6 +18,7 @@ export default function ChecklistPage() {
     const ships = useLiveQuery(() => db.ships.toArray()) ?? [];
 
     const [search, setSearch] = useState('');
+    const [membersWithFonction, setMembersWithFonction] = useState<CrewMemberWithFonction[]>([]);
 
     // Label affiché dans l'autocomplétion : ID + nom navire + destination + date
     const suggestions = lists.map(l =>
@@ -28,6 +30,18 @@ export default function ChecklistPage() {
         suggestions[idx] === search
     );
     const selectedShip = ships.find(s => s.id === selectedList?.shipId);
+
+    useEffect(() => {
+        if (!selectedList) {
+            setMembersWithFonction([]);
+            return;
+        }
+
+        enrichMembersWithFonction(selectedList.members)
+            .then(setMembersWithFonction);
+    }, [selectedList]);
+
+    const sortedMembers = sortCrewByHierarchy(membersWithFonction);
 
     const exportPDF = () => {
         if (!selectedList || !selectedShip) return;
@@ -68,31 +82,22 @@ export default function ChecklistPage() {
                 {/* Aperçu */}
                 {selectedList && (
                     <div className="bg-navy-700 rounded-lg p-4 space-y-3">
-
-                        {/* ID de la liste — mis en avant */}
-                        <div className="flex items-center gap-2 pb-2 border-b border-navy-600">
-                            <Hash size={14} className="text-ocean-400 flex-shrink-0" />
-                            <span className="text-xs text-slate-400">Référence liste :</span>
-                            <span className="font-mono text-sm font-bold text-ocean-400">
-                                #{formatId(selectedList.id)}
-                            </span>
-                        </div>
-
-                        {/* Infos */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                            {[
-                                ['Navire', selectedList.shipName],
-                                ['Immat.', selectedShip?.immatriculation ?? '—'],
-                                ['Capitaine', selectedList.capitaine],
-                                ['Départ', selectedList.lieuDepart],
-                                ['Destination', selectedList.destination],
-                                ['Membres', String(selectedList.members.length)],
-                            ].map(([label, value]) => (
-                                <div key={label}>
-                                    <span className="text-slate-500">{label} : </span>
-                                    <span className="text-slate-200">{value}</span>
-                                </div>
-                            ))}
+                        {/* ... infos ... */}
+                        <div className="border-t border-navy-600 pt-3">
+                            <div className="text-xs font-semibold text-slate-400 uppercase mb-2">
+                                Liste d'équipage
+                            </div>
+                            <div className="space-y-1">
+                                {sortedMembers.map((m, i) => (
+                                    <div key={i} className="flex gap-3 text-xs text-slate-400">
+                                        <span className="text-slate-600 w-4">{i + 1}.</span>
+                                        <span className="text-slate-300 truncate">
+                                            {m.nom.toUpperCase()} {m.prenom}
+                                        </span>
+                                        <span className="text-slate-500 ml-auto">{m.fonction}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 )}

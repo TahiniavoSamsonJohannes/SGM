@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import type { CrewList, ChecklistDoc } from './db';
-import { computeContractTotals, logExport } from './db';
+import { computeContractTotals, enrichMembersWithFonction, logExport } from './db';
 import { sortCrewByHierarchy, calculateAge } from './utils/crewSort';
 import { fmtDate, fmtDateLong, fmtDateShort, fmtNumber } from './utils/fmt';
 
@@ -164,7 +164,11 @@ export async function generateCrewListPDF(list: CrewList): Promise<void> {
     y += headerH;
 
     // ── Données — triées par hiérarchie ───────────────────────────────
-    const sortedMembers = sortCrewByHierarchy(list.members);
+    const membersWithFonction =
+        await enrichMembersWithFonction(list.members);
+
+    const sortedMembers =
+        sortCrewByHierarchy(membersWithFonction);
 
     doc.setFont('times', 'normal');
     doc.setFontSize(6.5);
@@ -373,7 +377,13 @@ export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
 
     let y = startY + totalHeader;
 
-    doc_.members.forEach((m, idx) => {
+    const membersWithFonction =
+        await enrichMembersWithFonction(doc_.members);
+
+    const sortedMembers =
+        sortCrewByHierarchy(membersWithFonction);
+
+    sortedMembers.forEach((m, idx) => {
         x = startX;
 
         // ── Dessiner toutes les cellules de la ligne ──────────────────
@@ -529,6 +539,10 @@ export interface ContractPDFData {
     forfaitHeuresSupp: number;
     salaireCongeJournalier: number;
     indemRNC: number;
+    totalSalaireBase: number;
+    totalForfait: number;
+    totalConge: number;
+    totalRNC: number;
     beneficiaire: string;
     numCompteBancaire: string;
     montantDelegation: number;

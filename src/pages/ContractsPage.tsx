@@ -16,12 +16,9 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import Input from '../components/Input';
 import AutoComplete from '../components/AutoComplete';
 import DatePicker from '../components/DatePicker';
+import { fmtDate } from '../utils/fmt';
 
 // ── Formatage ──────────────────────────────────────────────────────────────────
-function fmtDate(iso: string) {
-    if (!iso) return '—';
-    return new Date(iso + 'T00:00:00').toLocaleDateString('fr-FR');
-}
 function fmtNumber(n: number) {
     return n.toLocaleString('fr-FR');
 }
@@ -36,6 +33,8 @@ function emptyContractForm(): Omit<Contract, 'id' | 'crewMemberId' | 'createdAt'
         dateDebut: '', dateFin: '',
         salaireBaseJournalier: 0, forfaitHeuresSupp: 0,
         salaireCongeJournalier: 0, indemRNC: 0,
+        totalSalaireBase: 0, totalForfait: 0,
+        totalConge: 0, totalRNC: 0,
         beneficiaire: '', numCompteBancaire: '', montantDelegation: 0,
     };
 }
@@ -82,14 +81,6 @@ export default function ContractsPage() {
         `${s.nom.toUpperCase()} — ${s.immatriculation}`
     );
 
-    // ── Totaux calculés ──────────────────────────────────────────────
-    const totals = computeContractTotals({
-        salaireBaseJournalier: form.salaireBaseJournalier,
-        forfaitHeuresSupp: form.forfaitHeuresSupp,
-        salaireCongeJournalier: form.salaireCongeJournalier,
-        indemRNC: form.indemRNC,
-    });
-
     // ── Sélection membre existant ────────────────────────────────────
     useEffect(() => {
         if (!memberSearch.trim()) { setSelectedMember(null); return; }
@@ -125,6 +116,10 @@ export default function ContractsPage() {
             forfaitHeuresSupp: c.forfaitHeuresSupp,
             salaireCongeJournalier: c.salaireCongeJournalier,
             indemRNC: c.indemRNC,
+            totalSalaireBase: c.totalSalaireBase ?? 0,
+            totalForfait: c.totalForfait ?? 0,
+            totalConge: c.totalConge ?? 0,
+            totalRNC: c.totalRNC ?? 0,
             beneficiaire: c.beneficiaire, numCompteBancaire: c.numCompteBancaire,
             montantDelegation: c.montantDelegation,
         });
@@ -149,7 +144,12 @@ export default function ContractsPage() {
             if (!newMemberForm.nom.trim()) errors.newMember = 'Nom requis';
             else if (!newMemberForm.prenom.trim()) errors.newMember = 'Prénom requis';
             else if (!newMemberForm.dateNaissance) errors.newMember = 'Date de naissance requise';
+            else if (!newMemberForm.lieuNaissance) errors.newMember = 'Lieu de naissance requis';
+            else if (!newMemberForm.adresse.trim()) errors.newMember = 'Adresse requise';
             else if (!newMemberForm.fascicule.trim()) errors.newMember = 'Fascicule requis';
+            else if (!newMemberForm.telephone.trim()) errors.newMember = 'Téléphone requis';
+            else if (!newMemberForm.nationalite.trim()) errors.newMember = 'Nationalité requise';
+            else if (!newMemberForm.brevets.trim()) errors.newMember = 'Brevets requis';
         }
 
         // Validation contrat
@@ -168,7 +168,6 @@ export default function ContractsPage() {
             memberId = await db.crewMembers.add({
                 nom: newMemberForm.nom.toUpperCase().trim(),
                 prenom: newMemberForm.prenom.trim(),
-                fonction: newMemberForm.fonction.trim(),
                 fascicule: newMemberForm.fascicule.trim(),
                 brevets: newMemberForm.brevets.trim(),
                 dateNaissance: newMemberForm.dateNaissance,
@@ -217,6 +216,7 @@ export default function ContractsPage() {
     const exportPDF = async (c: Contract) => {
         const member = allMembers.find(m => m.id === c.crewMemberId);
         if (!member) return;
+
         const pdfData: ContractPDFData = {
             nom: member.nom,
             prenom: member.prenom,
@@ -233,10 +233,15 @@ export default function ContractsPage() {
             forfaitHeuresSupp: c.forfaitHeuresSupp,
             salaireCongeJournalier: c.salaireCongeJournalier,
             indemRNC: c.indemRNC,
+            totalSalaireBase: c.totalSalaireBase ?? 0,
+            totalForfait: c.totalForfait ?? 0,
+            totalConge: c.totalConge ?? 0,
+            totalRNC: c.totalRNC ?? 0,
             beneficiaire: c.beneficiaire,
             numCompteBancaire: c.numCompteBancaire,
             montantDelegation: c.montantDelegation,
         };
+
         await generateContractPDF(pdfData);
     };
 
@@ -348,7 +353,7 @@ export default function ContractsPage() {
 
                                     {/* Période + durée calculée */}
                                     <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-x-3">
-                                        <span>Du {fmtDate(c.dateDebut)} au {fmtDate(c.dateFin)}</span>
+                                        <span>Du {fmtDate(new Date(c.dateDebut))} au {fmtDate(new Date(c.dateFin))}</span>
                                         <span className="text-slate-600 font-medium">
                                             Durée : {computeDuration(c.dateDebut, c.dateFin)}
                                         </span>
@@ -417,8 +422,8 @@ export default function ContractsPage() {
                                         <div className="font-semibold text-slate-200 text-sm">
                                             {selectedMember.nom.toUpperCase()} {selectedMember.prenom}
                                         </div>
-                                        <div>DDN : {fmtDate(selectedMember.dateNaissance)}
-                                            {selectedMember.lieuNaissance && ` — ${selectedMember.lieuNaissance}`}
+                                        <div>Né(e) le {fmtDate(new Date(selectedMember.dateNaissance))}
+                                            {selectedMember.lieuNaissance && ` à ${selectedMember.lieuNaissance}`}
                                         </div>
                                         {selectedMember.fascicule && (
                                             <div>Fascicule : {selectedMember.fascicule}</div>
@@ -521,13 +526,13 @@ export default function ContractsPage() {
                                         />
                                     </div>
                                     <Input
-                                        label="Fascicule / LPM *"
+                                        label="Fascicule *"
                                         value={newMemberForm.fascicule}
                                         onChange={e => setNewMemberForm(f => ({ ...f, fascicule: e.target.value }))}
                                         placeholder="Ex: MJ 22 236"
                                     />
                                     <Input
-                                        label="Téléphone"
+                                        label="Téléphone *"
                                         type="tel"
                                         value={newMemberForm.telephone}
                                         onChange={e => setNewMemberForm(f => ({ ...f, telephone: e.target.value }))}
@@ -542,7 +547,7 @@ export default function ContractsPage() {
                                     />
                                     <div>
                                         <label className="block text-xs font-medium text-slate-400 mb-1">
-                                            Nationalité
+                                            Nationalité *
                                         </label>
                                         <AutoComplete
                                             value={newMemberForm.nationalite}
@@ -555,7 +560,7 @@ export default function ContractsPage() {
                                     </div>
                                     <div className="col-span-1 sm:col-span-2">
                                         <label className="block text-xs font-medium text-slate-400 mb-1">
-                                            Brevets
+                                            Brevets *
                                         </label>
                                         <AutoComplete
                                             value={newMemberForm.brevets}
@@ -563,7 +568,7 @@ export default function ContractsPage() {
                                             suggestions={dynValues
                                                 .filter(v => v.type === 'brevet')
                                                 .map(v => v.value)}
-                                            placeholder="BASE / STCW / ..."
+                                            placeholder="BASE - STCW - ..."
                                         />
                                     </div>
                                 </div>
@@ -628,55 +633,153 @@ export default function ContractsPage() {
                         </div>
                     </div>
 
-                    {/* Salaires */}
-                    <div className="bg-navy-700 rounded-xl p-4 space-y-3">
-                        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                            Rémunération
-                        </h3>
-                        <div className="grid grid-cols-2 gap-3">
-                            {([
-                                ['Salaire base journalier (Ar)', 'salaireBaseJournalier'],
-                                ['Forfait heures supp. (Ar/mois)', 'forfaitHeuresSupp'],
-                                ['Salaire congé journalier (Ar)', 'salaireCongeJournalier'],
-                                ['Indemnité RNC (Ar)', 'indemRNC'],
-                            ] as [string, keyof typeof form][]).map(([label, key]) => (
-                                <div key={key}>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">
-                                        {label}
-                                    </label>
-                                    <input
-                                        type="number" min={0}
-                                        value={form[key] as number || ''}
-                                        onChange={e => setForm(f => ({
-                                            ...f, [key]: parseFloat(e.target.value) || 0,
-                                        }))}
-                                        className="w-full bg-navy-800 border border-navy-600 rounded-lg
-                      px-3 py-2 text-sm text-slate-200 focus:outline-none
-                      focus:border-ocean-500 transition"
-                                    />
-                                </div>
-                            ))}
-                        </div>
+                    {/* Rémunération */}
+                    <div className="overflow-x-auto custom-scroll -mx-1 px-1">
+                        <div className="min-w-[560px]">
+                            <div className="bg-navy-700 rounded-xl p-4 space-y-4">
+                                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                    Rémunération
+                                </h3>
 
-                        {/* Totaux calculés */}
-                        <div className="border-t border-navy-600 pt-3 space-y-1 text-xs">
-                            {[
-                                [`Base × 30 :`, totals.totalSalaireBase],
-                                [`Forfait :`, totals.totalForfait],
-                                [`Congé × 6 :`, totals.totalConge],
-                                [`RNC × 12 :`, totals.totalRNC],
-                            ].map(([label, val]) => (
-                                <div key={String(label)} className="flex justify-between text-slate-500">
-                                    <span>{label}</span>
-                                    <span className="font-mono">{fmtNumber(val as number)} Ar</span>
+                                {/* En-têtes colonnes */}
+                                <div className="grid grid-cols-3 gap-3 text-xs font-semibold
+        text-slate-500 uppercase tracking-wider px-1">
+                                    <span>Poste</span>
+                                    <span className="text-center">Valeur journalière / mensuelle</span>
+                                    <span className="text-center">Total mensuel (Ar)</span>
                                 </div>
-                            ))}
-                            <div className="flex justify-between text-slate-200 font-semibold pt-1
-                border-t border-navy-600">
-                                <span>TOTAL mensuel :</span>
-                                <span className="font-mono text-ocean-400">
-                                    {fmtNumber(totals.totalGeneral)} Ar
-                                </span>
+
+                                {/* Ligne 1 : Salaire de base */}
+                                <div className="grid grid-cols-3 gap-3 items-center">
+                                    <span className="text-xs text-slate-300">Salaire de base journalier</span>
+                                    <div>
+                                        <input type="number" min={0}
+                                            value={form.salaireBaseJournalier || ''}
+                                            onChange={e => setForm(f => ({
+                                                ...f, salaireBaseJournalier: parseFloat(e.target.value) || 0,
+                                            }))}
+                                            className="w-full bg-navy-800 border border-navy-600 rounded-lg
+              px-3 py-2 text-sm text-slate-200 focus:outline-none
+              focus:border-ocean-500 transition text-right"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                    <div>
+                                        <input type="number" min={0}
+                                            value={form.totalSalaireBase || ''}
+                                            onChange={e => setForm(f => ({
+                                                ...f, totalSalaireBase: parseFloat(e.target.value) || 0,
+                                            }))}
+                                            className="w-full bg-navy-800 border border-ocean-600/40 rounded-lg
+              px-3 py-2 text-sm text-ocean-300 focus:outline-none
+              focus:border-ocean-500 transition text-right"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Ligne 2 : Forfait heures supplémentaires */}
+                                <div className="grid grid-cols-3 gap-3 items-center">
+                                    <span className="text-xs text-slate-300">Forfait heures supplémentaires</span>
+                                    <div>
+                                        <input type="number" min={0}
+                                            value={form.forfaitHeuresSupp || ''}
+                                            onChange={e => setForm(f => ({
+                                                ...f, forfaitHeuresSupp: parseFloat(e.target.value) || 0,
+                                            }))}
+                                            className="w-full bg-navy-800 border border-navy-600 rounded-lg
+              px-3 py-2 text-sm text-slate-200 focus:outline-none
+              focus:border-ocean-500 transition text-right"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                    <div>
+                                        <input type="number" min={0}
+                                            value={form.totalForfait || ''}
+                                            onChange={e => setForm(f => ({
+                                                ...f, totalForfait: parseFloat(e.target.value) || 0,
+                                            }))}
+                                            className="w-full bg-navy-800 border border-ocean-600/40 rounded-lg
+              px-3 py-2 text-sm text-ocean-300 focus:outline-none
+              focus:border-ocean-500 transition text-right"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Ligne 3 : Salaire journalier de congé */}
+                                <div className="grid grid-cols-3 gap-3 items-center">
+                                    <span className="text-xs text-slate-300">Salaire journalier de congé</span>
+                                    <div>
+                                        <input type="number" min={0}
+                                            value={form.salaireCongeJournalier || ''}
+                                            onChange={e => setForm(f => ({
+                                                ...f, salaireCongeJournalier: parseFloat(e.target.value) || 0,
+                                            }))}
+                                            className="w-full bg-navy-800 border border-navy-600 rounded-lg
+              px-3 py-2 text-sm text-slate-200 focus:outline-none
+              focus:border-ocean-500 transition text-right"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                    <div>
+                                        <input type="number" min={0}
+                                            value={form.totalConge || ''}
+                                            onChange={e => setForm(f => ({
+                                                ...f, totalConge: parseFloat(e.target.value) || 0,
+                                            }))}
+                                            className="w-full bg-navy-800 border border-ocean-600/40 rounded-lg
+              px-3 py-2 text-sm text-ocean-300 focus:outline-none
+              focus:border-ocean-500 transition text-right"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Ligne 4 : Indemnité RNC */}
+                                <div className="grid grid-cols-3 gap-3 items-center">
+                                    <span className="text-xs text-slate-300">Indemnité de RNC</span>
+                                    <div>
+                                        <input type="number" min={0}
+                                            value={form.indemRNC || ''}
+                                            onChange={e => setForm(f => ({
+                                                ...f, indemRNC: parseFloat(e.target.value) || 0,
+                                            }))}
+                                            className="w-full bg-navy-800 border border-navy-600 rounded-lg
+              px-3 py-2 text-sm text-slate-200 focus:outline-none
+              focus:border-ocean-500 transition text-right"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                    <div>
+                                        <input type="number" min={0}
+                                            value={form.totalRNC || ''}
+                                            onChange={e => setForm(f => ({
+                                                ...f, totalRNC: parseFloat(e.target.value) || 0,
+                                            }))}
+                                            className="w-full bg-navy-800 border border-ocean-600/40 rounded-lg
+              px-3 py-2 text-sm text-ocean-300 focus:outline-none
+              focus:border-ocean-500 transition text-right"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Total général — calculé automatiquement */}
+                                <div className="border-t border-navy-600 pt-3 flex justify-between
+        items-center">
+                                    <span className="text-sm font-semibold text-slate-300">
+                                        TOTAL
+                                    </span>
+                                    <span className="font-mono text-base font-bold text-ocean-400">
+                                        {fmtNumber(
+                                            (form.totalSalaireBase || 0) +
+                                            (form.totalForfait || 0) +
+                                            (form.totalConge || 0) +
+                                            (form.totalRNC || 0)
+                                        )} Ar
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -730,8 +833,8 @@ export default function ContractsPage() {
                                 ['Navire', viewing.shipName.toUpperCase()],
                                 ['Immat.', viewing.immatriculation],
                                 ['Fonction', viewing.fonction],
-                                ['Début', fmtDate(viewing.dateDebut)],
-                                ['Fin', fmtDate(viewing.dateFin)],
+                                ['Début', fmtDate(new Date(viewing.dateDebut))],
+                                ['Fin', fmtDate(new Date(viewing.dateFin))],
                                 ['Statut', isContractActive(viewing) ? '✓ Actif' : '✗ Expiré'],
                                 ['Bénéficiaire', viewing.beneficiaire],
                                 ['Compte', viewing.numCompteBancaire],
@@ -746,26 +849,39 @@ export default function ContractsPage() {
                             ))}
                         </div>
 
-                        {/* Récap salaires */}
-                        <div className="bg-navy-700 rounded-xl p-4 space-y-2 text-xs">
-                            <div className="font-semibold text-slate-300 mb-2">Rémunération</div>
-                            {[
-                                ['Base journalière', `${fmtNumber(viewing.salaireBaseJournalier)} Ar × 30 = ${fmtNumber(computeContractTotals(viewing).totalSalaireBase)} Ar`],
-                                ['Forfait supp.', `${fmtNumber(viewing.forfaitHeuresSupp)} Ar`],
-                                ['Congé journalier', `${fmtNumber(viewing.salaireCongeJournalier)} Ar × 6 = ${fmtNumber(computeContractTotals(viewing).totalConge)} Ar`],
-                                ['Indemnité RNC', `${fmtNumber(viewing.indemRNC)} Ar × 12 = ${fmtNumber(computeContractTotals(viewing).totalRNC)} Ar`],
-                            ].map(([label, val]) => (
-                                <div key={label} className="flex justify-between text-slate-400">
-                                    <span>{label}</span>
-                                    <span className="font-mono">{val}</span>
+                        {/* Récap rémunération */}
+                        <div className="overflow-x-auto custom-scroll">
+                            <div className="min-w-[400px]">
+                                <div className="bg-navy-700 rounded-xl p-4 space-y-2 text-xs">
+                                    <div className="font-semibold text-slate-300 mb-3 text-sm">
+                                        Rémunération
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2 text-slate-500 font-semibold
+        uppercase tracking-wider pb-1 border-b border-navy-600">
+                                        <span>Poste</span>
+                                        <span className="text-right">Valeur</span>
+                                        <span className="text-right">Total mensuel</span>
+                                    </div>
+                                    {[
+                                        ['Salaire base', fmtNumber(viewing.salaireBaseJournalier), fmtNumber(viewing.totalSalaireBase ?? 0)],
+                                        ['Forfait supp.', fmtNumber(viewing.forfaitHeuresSupp), fmtNumber(viewing.totalForfait ?? 0)],
+                                        ['Congé', fmtNumber(viewing.salaireCongeJournalier), fmtNumber(viewing.totalConge ?? 0)],
+                                        ['RNC', fmtNumber(viewing.indemRNC), fmtNumber(viewing.totalRNC ?? 0)],
+                                    ].map(([label, val, total]) => (
+                                        <div key={label} className="grid grid-cols-3 gap-2 text-slate-400">
+                                            <span>{label}</span>
+                                            <span className="text-right font-mono">{val} Ar</span>
+                                            <span className="text-right font-mono text-ocean-300">{total} Ar</span>
+                                        </div>
+                                    ))}
+                                    <div className="flex justify-between text-slate-200 font-semibold
+        pt-2 border-t border-navy-600">
+                                        <span>TOTAL mensuel</span>
+                                        <span className="font-mono text-ocean-400">
+                                            {fmtNumber(computeContractTotals(viewing).totalGeneral)} Ar
+                                        </span>
+                                    </div>
                                 </div>
-                            ))}
-                            <div className="flex justify-between text-slate-200 font-semibold
-                pt-2 border-t border-navy-600">
-                                <span>TOTAL mensuel</span>
-                                <span className="font-mono text-ocean-400">
-                                    {fmtNumber(computeContractTotals(viewing).totalGeneral)} Ar
-                                </span>
                             </div>
                         </div>
 

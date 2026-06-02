@@ -37,7 +37,7 @@ export default function LoginPin({
     }, [pin, onSuccess]);
 
     return (
-        <div className="max-h-screen w-screen bg-navy-900 flex justify-center p-4 overflow-y-scroll scrollbar-hide-mobile">
+        <div className="max-h-screen w-screen bg-navy-900 flex justify-center p-4 overflow-y-scroll scrollbar-hide-mobile pb-safe">
             <div className={`h-fit w-full max-w-xs bg-navy-800 border border-navy-600
         rounded-2xl p-6 sm:p-8 shadow-2xl text-center
         ${shake ? 'animate-bounce' : ''} fade-in`}>
