@@ -37,8 +37,8 @@ export default function LoginPin({
     }, [pin, onSuccess]);
 
     return (
-        <div className="min-h-screen bg-navy-900 flex items-center justify-center p-4 pb-safe">
-            <div className={`w-full max-w-xs bg-navy-800 border border-navy-600
+        <div className="max-h-screen w-screen bg-navy-900 flex justify-center p-4 overflow-y-scroll scrollbar-hide-mobile">
+            <div className={`h-fit w-full max-w-xs bg-navy-800 border border-navy-600
         rounded-2xl p-6 sm:p-8 shadow-2xl text-center
         ${shake ? 'animate-bounce' : ''} fade-in`}>
 
@@ -47,14 +47,12 @@ export default function LoginPin({
                 <h1 className="text-lg sm:text-xl font-bold font-display text-white">
                     Armement Eustratiou
                 </h1>
-                <p className="text-sm text-slate-400 mt-1">Entrez votre code PIN</p>
+                <p className="text-sm text-slate-400 mt-1">Connexion</p>
 
                 <PinDots value={pin} max={MAX} />
                 {error && <p className="text-rose-400 text-xs mb-1">{error}</p>}
 
                 <PinKeypad onKey={handleKey} />
-
-                <p className="text-xs text-slate-600 mt-3">Clavier physique supporté</p>
 
                 {/* Séparateur */}
                 <div className="flex items-center gap-3 my-4">

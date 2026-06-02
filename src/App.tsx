@@ -229,7 +229,7 @@ export default function App() {
 
   // ── App shell ─────────────────────────────────────────────────────
   return (
-    <div className="h-screen flex bg-navy-900 overflow-hidden">
+    <div className="h-screen w-screen flex bg-navy-900 overflow-hidden">
 
       {sidebarOpen && (
         <div className="fixed inset-0 z-30 bg-black/60 lg:hidden"
@@ -295,7 +295,7 @@ export default function App() {
           </span>
         </header>
 
-        <main className="flex-1 overflow-y-auto custom-scroll">
+        <main className="flex-1 overflow-y-auto custom-scroll pb-safe">
           <div className="p-4 sm:p-6 max-w-4xl mx-auto pb-safe">
             {tab === 'dashboard' && <Dashboard setTab={navigate} />}
             {tab === 'crew' && <CrewPage />}

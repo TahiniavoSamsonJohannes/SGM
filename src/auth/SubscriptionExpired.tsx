@@ -1,8 +1,9 @@
-import { Phone, Mail, KeyRound } from 'lucide-react';
+import { Phone, Mail, KeyRound, Copy, Check } from 'lucide-react';
 import logoUrl from '../assets/logo-ae.png';
 import Input from '../components/Input';
 import { useState } from 'react';
-import { activateSubscription } from '../db';
+import { activateSubscription, db } from '../db';
+import { useLiveQuery } from 'dexie-react-hooks';
 
 interface Props {
     onActivated: () => void;  // abonnement activé → accès app
@@ -10,10 +11,19 @@ interface Props {
 }
 
 export default function SubscriptionExpired({ onActivated, onLogout }: Props) {
+    const config = useLiveQuery(() => db.authConfig.toCollection().first());
     const [subCode, setSubCode] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(false);
+    const [copied, setCopied] = useState(false);
+
+    const copyCode = () => {
+        if (!config?.machineCode) return;
+        navigator.clipboard.writeText(config.machineCode);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+    };
 
     const handleActivate = async () => {
         if (!subCode.trim()) { setError('Entrez votre code d\'abonnement'); return; }
@@ -30,8 +40,8 @@ export default function SubscriptionExpired({ onActivated, onLogout }: Props) {
     };
 
     return (
-        <div className="min-h-screen bg-navy-900 flex items-center justify-center p-4">
-            <div className="w-full max-w-sm bg-navy-800 border border-navy-600
+        <div className="max-h-screen w-screen bg-navy-900 flex justify-center p-4 overflow-y-scroll scrollbar-hide-mobile pb-safe">
+            <div className="h-fit w-full max-w-sm bg-navy-800 border border-navy-600
         rounded-2xl shadow-2xl p-6 fade-in space-y-5">
 
                 {/* En-tête */}
@@ -43,14 +53,39 @@ export default function SubscriptionExpired({ onActivated, onLogout }: Props) {
                     </h1>
                     <p className="text-sm text-slate-400 mt-1">
                         Votre abonnement est inexistant ou expiré.
-                        Contactez le développeur pour l'activer ou le renouveler.
+                        Contactez-nous pour l'activer ou le renouveler.
                     </p>
                 </div>
-
+                {/* Machine code */}
+                <div className="bg-navy-800 border border-navy-600 rounded-xl p-4 space-y-3">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                        Votre code machine
+                    </p>
+                    <div
+                        className="bg-navy-900 rounded-lg px-3 py-2.5
+            overflow-x-auto custom-scroll"
+                        style={{ whiteSpace: 'nowrap' }}
+                    >
+                        <span className="font-mono text-xs text-ocean-400">
+                            {config?.machineCode || '—'}
+                        </span>
+                    </div>
+                    <button
+                        onClick={copyCode}
+                        className="w-full flex items-center justify-center gap-2
+            bg-navy-700 hover:bg-navy-600 text-white py-2
+            rounded-lg text-sm transition"
+                    >
+                        {copied
+                            ? <><Check size={14} className="text-emerald-400" /> Copié !</>
+                            : <><Copy size={14} /> Copier</>
+                        }
+                    </button>
+                </div>
                 {/* Contact développeur */}
                 <div className="bg-navy-700 rounded-xl p-4 space-y-2">
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                        Contact
+                        Contactez-nous
                     </p>
                     <div className="flex items-center gap-2 text-sm text-slate-300">
                         <Phone size={13} className="text-ocean-400 flex-shrink-0" />

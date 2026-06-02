@@ -23,18 +23,46 @@ body {
   color: #e2e8f0;
   min-height: 100vh;
   overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .pb-safe {
   padding-bottom: 15vh;
 }
 
+@media (min-width: 430px) {
+  .scrollbar-hide-mobile::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide-mobile {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
 /* ── Scrollbar personnalisée — appliquée globalement ── */
-*::-webkit-scrollbar        { width: 5px; height: 5px; }
-*::-webkit-scrollbar-track  { background: var(--navy-900); }
-*::-webkit-scrollbar-thumb  { background: var(--ocean-600); border-radius: 0; }
-*::-webkit-scrollbar-thumb:hover { background: var(--ocean-500); }
-*::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--navy-900);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--ocean-600);
+  border-radius: 0;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ocean-500);
+}
+*::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+  width: 0;
+}
 
 /* Firefox */
 * {

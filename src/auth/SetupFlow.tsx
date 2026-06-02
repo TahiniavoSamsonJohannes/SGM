@@ -76,17 +76,17 @@ export default function SetupFlow({ onDone, initialStep = 'email', onHasAccount 
 
     // ── PIN ──────────────────────────────────────────────────────────────
     const handlePinKey = useCallback(async (k: string) => {
-        if(step === 'email') return;
+        if (step === 'email') return;
         setError(''); // effacer l'erreur à chaque frappe
         const isConfirm = step === 'confirm';
         const current = isConfirm ? confirmPin : pin;
         const setter = isConfirm ? setConfirmPin : setPin;
-        
+
         if (k === 'DEL') {
             setter(current.slice(0, -1));
             return;
         }
-        
+
         if (k === 'OK') {
             // Valider uniquement à la soumission
             if (current.length < MAX_PIN) {
@@ -162,8 +162,8 @@ export default function SetupFlow({ onDone, initialStep = 'email', onHasAccount 
     };
 
     return (
-        <div className="min-h-screen bg-navy-900 flex items-center justify-center p-4 pb-safe">
-            <div className="w-full max-w-sm bg-navy-800 border border-navy-600
+        <div className="max-h-screen w-screen bg-navy-900 flex justify-center p-4 overflow-y-scroll scrollbar-hide-mobile pb-safe">
+            <div className="h-fit w-full max-w-sm bg-navy-800 border border-navy-600
         rounded-2xl shadow-2xl p-6 fade-in">
 
                 {/* En-tête */}
@@ -242,9 +242,6 @@ export default function SetupFlow({ onDone, initialStep = 'email', onHasAccount 
                         ) : (
                             <PinKeypad onKey={handlePinKey} />
                         )}
-                        <p className="text-xs text-slate-600 text-center mt-3">
-                            Clavier physique supporté
-                        </p>
                     </div>
                 )}
 
@@ -269,20 +266,20 @@ export default function SetupFlow({ onDone, initialStep = 'email', onHasAccount 
                   rounded-lg text-sm transition">
                                 {copied
                                     ? <><Check size={14} className="text-emerald-400" /> Copié !</>
-                                    : <><Copy size={14} /> Copier le code</>}
+                                    : <><Copy size={14} /> Copier</>}
                             </button>
                         </div>
 
                         {/* Contact */}
                         <div className="bg-navy-700/60 rounded-xl p-3 space-y-2">
                             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                Contact pour activer l'abonnement
+                                Contactez-nous
                             </p>
-                            <div className="flex items-center gap-2 text-xs text-slate-300">
+                            <div className="flex items-center gap-2 text-sm text-slate-300">
                                 <Phone size={11} className="text-ocean-400 flex-shrink-0" />
                                 +261 34 88 703 22
                             </div>
-                            <div className="flex items-center gap-2 text-xs text-slate-300 break-all">
+                            <div className="flex items-center gap-2 text-sm text-slate-300 break-all">
                                 <Mail size={11} className="text-ocean-400 flex-shrink-0" />
                                 samsonjohannestahiniavo777@gmail.com
                             </div>

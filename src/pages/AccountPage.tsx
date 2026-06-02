@@ -279,22 +279,22 @@ function RenewSubscriptionPage({ onBack }: { onBack: () => void }) {
                 >
                     {copied
                         ? <><Check size={14} className="text-emerald-400" /> Copié !</>
-                        : <><Copy size={14} /> Copier le code machine</>
+                        : <><Copy size={14} /> Copier</>
                     }
                 </button>
             </div>
 
-            {/* Contacts développeur */}
-            <div className="bg-navy-800 border border-navy-600 rounded-xl p-4 space-y-2">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                    Contact pour activer l'abonnement
+            {/* Contact */}
+            <div className="bg-navy-700/60 rounded-xl p-3 space-y-2">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Contactez-nous
                 </p>
                 <div className="flex items-center gap-2 text-sm text-slate-300">
-                    <Phone size={13} className="text-ocean-400 flex-shrink-0" />
+                    <Phone size={11} className="text-ocean-400 flex-shrink-0" />
                     +261 34 88 703 22
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-300 break-all">
-                    <Mail size={13} className="text-ocean-400 flex-shrink-0" />
+                    <Mail size={11} className="text-ocean-400 flex-shrink-0" />
                     samsonjohannestahiniavo777@gmail.com
                 </div>
             </div>
