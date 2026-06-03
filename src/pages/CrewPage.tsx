@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus, Edit3, Trash2, Save, Users, Search } from 'lucide-react';
 import {
-    db, addOrIncrementDynamic, getMembersFonctions,
+    db, addOrIncrementDynamic,
     type CrewMember,
+    enrichMembersWithFonction,
 } from '../db';
 import AutoComplete from '../components/AutoComplete';
 import Input from '../components/Input';
@@ -96,21 +97,17 @@ function MemberForm({
 
 // ── Page Équipage ─────────────────────────────────────────────────
 export default function CrewPage() {
-    const rawMembers = useLiveQuery(() => db.crewMembers.toArray()) ?? [];
+    const membersWithFonction = useLiveQuery(async () => {
+        const members = await db.crewMembers.toArray();
+        console.log('MEMBERS', members);
+        
+        if (members.length === 0) return [];
+        return enrichMembersWithFonction(members);
+    }, []) ?? [];
     const dynamicValues = useLiveQuery(() => db.dynamicValues.toArray()) ?? [];
-    const allContracts = useLiveQuery(() => db.contracts.toArray()) ?? [];
 
-    // Fonctions résolues depuis les contrats (map memberId → fonction)
-    const [fonctions, setFonctions] = useState<Record<number, string>>({});
-
-    useEffect(() => {
-        if (rawMembers.length === 0) return;
-        const ids = rawMembers.map(m => m.id!).filter(Boolean);
-        getMembersFonctions(ids).then(setFonctions);
-    }, [rawMembers, allContracts]);
-
-    // Tri décroissant par createdAt
-    const members = [...rawMembers].sort(
+    // Tri décroissant par updatedAt
+    const members = [...membersWithFonction].sort(
         (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
 
@@ -203,8 +200,9 @@ export default function CrewPage() {
     };
 
     const filtered = members.filter(m =>
-        `${m.nom} ${m.prenom} ${fonctions[m.id!] ?? ''}`
-            .toLowerCase().includes(search.toLowerCase())
+        `${m.nom} ${m.prenom} ${m.fonction}`
+            .toLowerCase()
+            .includes(search.toLowerCase())
     );
 
     return (
@@ -242,7 +240,6 @@ export default function CrewPage() {
                         <p className="text-sm">Aucun membre trouvé</p>
                     </div>
                 ) : filtered.map(m => {
-                    const fonction = fonctions[m.id!] ? fonctions[m.id!] : '';
                     return (
                         <div key={m.id} onClick={() => openView(m)}
                             className="bg-navy-800 border border-navy-600 rounded-xl p-4
@@ -258,8 +255,29 @@ export default function CrewPage() {
                                     <div className="font-semibold text-slate-200 text-sm truncate">
                                         {m.nom.toUpperCase()} {m.prenom}
                                     </div>
-                                    <div className="text-xs text-slate-500 truncate">
-                                        {fonction} · Fasc. {m.fascicule}
+                                    <div className="text-xs text-slate-500 truncate flex items-center gap-1.5 flex-wrap">
+                                        <span>{m.fonction || '—'}</span>
+                                        {m.contratActif === true && (
+                                            <span className="inline-flex items-center gap-0.5 text-emerald-400
+      bg-emerald-400/10 px-1.5 py-0.5 rounded-full text-xs font-medium
+      flex-shrink-0">
+                                                Actif
+                                            </span>
+                                        )}
+                                        {m.contratActif === false && (
+                                            <span className="inline-flex items-center gap-0.5 text-rose-400
+      bg-rose-400/10 px-1.5 py-0.5 rounded-full text-xs font-medium
+      flex-shrink-0">
+                                                Expiré
+                                            </span>
+                                        )}
+                                        {m.contratActif === null && (
+                                            <span className="inline-flex items-center gap-0.5 text-slate-600
+      bg-slate-600/10 px-1.5 py-0.5 rounded-full text-xs flex-shrink-0">
+                                                Sans contrat
+                                            </span>
+                                        )}
+                                        <span className="text-slate-600">· Fasc. {m.fascicule}</span>
                                     </div>
                                 </div>
                             </div>
@@ -322,8 +340,32 @@ export default function CrewPage() {
                                 <div className="text-lg font-bold text-white">
                                     {active.nom.toUpperCase()} {active.prenom}
                                 </div>
-                                <div className="text-sm text-ocean-400">
-                                    {fonctions[active.id!] ? fonctions[active.id!] : '—'}
+                                <div className="text-sm flex items-center gap-2 flex-wrap">
+                                    <span className="text-ocean-400">
+                                        {membersWithFonction.find(m => m.id === active.id)?.fonction || '—'}
+                                    </span>
+                                    {(() => {
+                                        const mwf = membersWithFonction.find(m => m.id === active.id);
+                                        if (!mwf) return null;
+                                        if (mwf.contratActif === true) return (
+                                            <span className="text-xs text-emerald-400 bg-emerald-400/10
+        px-2 py-0.5 rounded-full font-medium">
+                                                Contrat actif
+                                            </span>
+                                        );
+                                        if (mwf.contratActif === false) return (
+                                            <span className="text-xs text-rose-400 bg-rose-400/10
+        px-2 py-0.5 rounded-full font-medium">
+                                                Contrat expiré
+                                            </span>
+                                        );
+                                        return (
+                                            <span className="text-xs text-slate-500 bg-slate-600/10
+        px-2 py-0.5 rounded-full">
+                                                Sans contrat
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>

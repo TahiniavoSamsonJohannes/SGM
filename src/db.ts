@@ -410,23 +410,133 @@ export async function getMembersFonctions(
 
 export interface CrewMemberWithFonction extends CrewMember {
     fonction: string;
+    contratActif: boolean | null;
 }
 
 export async function enrichMembersWithFonction(
     members: CrewMember[]
 ): Promise<CrewMemberWithFonction[]> {
+
     const ids = members
         .map(m => m.id)
         .filter((id): id is number => id !== undefined);
 
-    const fonctions = await getMembersFonctions(ids);
+    if (ids.length === 0) {
+        return members.map(m => ({
+            ...m,
+            fonction: '',
+            contratActif: null,
+        }));
+    }
 
-    return members.map(member => ({
-        ...member,
-        fonction: member.id
-            ? (fonctions[member.id] ?? '')
-            : '',
-    }));
+    const allContracts = await db.contracts
+        .where('crewMemberId')
+        .anyOf(ids)
+        .toArray();
+
+    const now = new Date();
+
+    return members.map(member => {
+        if (!member.id) {
+            return {
+                ...member,
+                fonction: '',
+                contratActif: null,
+            };
+        }
+
+        const memberContracts = allContracts
+            .filter(c => c.crewMemberId === member.id)
+            .sort((a, b) =>
+                new Date(b.updatedAt ?? 0).getTime() -
+                new Date(a.updatedAt ?? 0).getTime()
+            );
+
+        if (memberContracts.length === 0) {
+            return {
+                ...member,
+                fonction: '',
+                contratActif: null,
+            };
+        }
+
+        const latest = memberContracts[0];
+
+        return {
+            ...member,
+            fonction: latest.fonction ?? '',
+            contratActif: latest.dateFin
+                ? new Date(latest.dateFin) >= now
+                : false,
+        };
+    });
+}
+
+export interface CrewListMemberFull extends CrewMember {
+    fonction: string;
+    age: string;
+}
+
+export async function enrichCrewListMembers(
+    partialMembers: Array<Partial<CrewMember> & { id: number; nom: string; prenom: string }>
+): Promise<CrewListMemberFull[]> {
+    if (partialMembers.length === 0) return [];
+
+    const now = new Date();
+
+    function calcAge(dateNaissance: string): string {
+        if (!dateNaissance) return '—';
+        const birth = new Date(dateNaissance + 'T00:00:00');
+        if (isNaN(birth.getTime())) return '—';
+        let age = now.getFullYear() - birth.getFullYear();
+        const m = now.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+        return String(age);
+    }
+
+    // Identifier les membres dont les données sont incomplètes
+    // Un membre est "complet" s'il a au moins fascicule ou dateNaissance
+    const incompleteIds = partialMembers
+        .filter(m => !m.fascicule && !m.dateNaissance)
+        .map(m => m.id);
+
+    // Récupérer uniquement les membres incomplets depuis la DB
+    let dbMembers: CrewMember[] = [];
+    if (incompleteIds.length > 0) {
+        dbMembers = await db.crewMembers
+            .where('id').anyOf(incompleteIds)
+            .toArray();
+    }
+
+    // Récupérer toutes les fonctions
+    const allIds = partialMembers.map(m => m.id);
+    const fonctions = await getMembersFonctions(allIds);
+
+    return partialMembers.map(partial => {
+        // Si le membre est déjà complet, l'utiliser directement
+        const isComplete = !!(partial.fascicule || partial.dateNaissance);
+        const base = isComplete
+            ? (partial as CrewMember)
+            : (dbMembers.find(m => m.id === partial.id) ?? partial as CrewMember);
+
+        return {
+            id: base.id ?? partial.id,
+            nom: base.nom ?? partial.nom,
+            prenom: base.prenom ?? partial.prenom,
+            fascicule: base.fascicule ?? '',
+            brevets: base.brevets ?? '',
+            dateNaissance: base.dateNaissance ?? '',
+            lieuNaissance: base.lieuNaissance ?? '',
+            adresse: base.adresse ?? '',
+            telephone: base.telephone ?? '',
+            email: base.email ?? '',
+            nationalite: base.nationalite ?? '',
+            createdAt: base.createdAt ?? new Date(),
+            updatedAt: base.updatedAt ?? new Date(),
+            fonction: fonctions[partial.id] ?? '—',
+            age: calcAge(base.dateNaissance ?? ''),
+        } as CrewListMemberFull;
+    });
 }
 
 export async function activateSubscription(

@@ -1,17 +1,23 @@
+import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { FileText, CheckSquare, Clock } from 'lucide-react';
+import { FileText, CheckSquare, Clock, Search } from 'lucide-react';
 import { db } from '../db';
 
 export default function HistoryPage() {
-    // Récupérer tous les exports puis trier en JS (robuste)
-    const rawExports = useLiveQuery(() =>
-        db.exportedFiles.toArray()
-    ) ?? [];
+    const rawExports = useLiveQuery(() => db.exportedFiles.toArray()) ?? [];
+    const [search, setSearch] = useState('');
 
-    // Tri décroissant par date d'exportation en JS
-    const exports = [...rawExports].sort((a, b) =>
-        new Date(b.exportedAt).getTime() - new Date(a.exportedAt).getTime()
-    ).slice(0, 50);
+    const exports = [...rawExports]
+        .sort((a, b) =>
+            new Date(b.exportedAt).getTime() - new Date(a.exportedAt).getTime()
+        )
+        .slice(0, 100);
+
+    const filtered = exports.filter(e =>
+        e.filename.toLowerCase().includes(search.toLowerCase()) ||
+        e.shipName.toLowerCase().includes(search.toLowerCase()) ||
+        e.destination.toLowerCase().includes(search.toLowerCase())
+    );
 
     const fmt = (d: Date) =>
         new Date(d).toLocaleString('fr-FR', {
@@ -27,16 +33,32 @@ export default function HistoryPage() {
                 Historique des exports
             </h1>
 
+            {/* Recherche */}
+            <div className="relative flex-shrink-0">
+                <Search size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Rechercher par fichier, navire, destination..."
+                    className="w-full bg-navy-800 border border-navy-600 rounded-lg pl-9 pr-3
+            py-2 text-sm text-slate-200 placeholder-slate-500
+            focus:outline-none focus:border-ocean-500 transition"
+                />
+            </div>
+
             {/* Liste scrollable */}
             <div className="flex-1 min-h-0 overflow-y-auto custom-scroll space-y-2 pb-4">
-                {exports.length === 0 ? (
+                {filtered.length === 0 ? (
                     <div className="bg-navy-800 border border-dashed border-navy-600
             rounded-xl p-10 text-center text-slate-500">
                         <Clock size={28} className="mx-auto mb-3 opacity-40" />
-                        <p className="text-sm">Aucun fichier exporté</p>
+                        <p className="text-sm">
+                            {search ? 'Aucun résultat' : 'Aucun fichier exporté'}
+                        </p>
                     </div>
                 ) : (
-                    exports.map(e => (
+                    filtered.map(e => (
                         <div key={e.id}
                             className="bg-navy-800 border border-navy-600 rounded-xl p-4
                 flex items-center gap-3 hover:border-navy-500 transition">

@@ -9,14 +9,20 @@ export default function Dashboard({ setTab }: { setTab: (t: TabId) => void }) {
     const crewCount = useLiveQuery(() => db.crewMembers.count()) ?? 0;
     const shipCount = useLiveQuery(() => db.ships.count()) ?? 0;
     const listCount = useLiveQuery(() => db.crewLists.count()) ?? 0;
-    const checkCount = useLiveQuery(() => db.checklistDocs.count()) ?? 0;
+    const activeContractsCount = useLiveQuery(async () => {
+        const now = new Date();
+        const contracts = await db.contracts.toArray();
+        return contracts.filter(c =>
+            c.dateFin && new Date(c.dateFin) >= now
+        ).length;
+    }) ?? 0;
     const recent = useLiveQuery(() => db.crewLists.orderBy('updatedAt').reverse().limit(3).toArray()) ?? [];
-
+    
     const stats = [
         { icon: Users, label: "Membres d'équipage", value: crewCount, tab: 'crew', color: 'text-ocean-400' },
         { icon: FileText, label: 'Navires', value: shipCount, tab: 'ships', color: 'text-emerald-400' },
         { icon: FileText, label: "Listes d'équipage", value: listCount, tab: 'crewlists', color: 'text-amber-400' },
-        { icon: CheckSquare, label: 'Checklists', value: checkCount, tab: 'checklist', color: 'text-rose-400' },
+        { icon: CheckSquare, label: 'Contrats actifs', value: activeContractsCount, tab: 'contracts', color: 'text-rose-400' },
     ];
 
     return (

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  LayoutDashboard, Users, FileText, CheckSquare,
+  LayoutDashboard, Users, FileText,
   History, UserCircle, LogOut, Menu, FileSignature,
 } from 'lucide-react';
 import {
@@ -18,7 +18,6 @@ import CrewPage from './pages/CrewPage';
 import ShipsPage from './pages/ShipsPage';
 import CrewListsPage from './pages/CrewListsPage';
 import CrewListPage from './pages/CrewListPage';
-import ChecklistPage from './pages/ChecklistPage';
 import HistoryPage from './pages/HistoryPage';
 import AccountPage from './pages/AccountPage';
 import DataPage from './pages/DataPage';
@@ -27,13 +26,13 @@ import ContractsPage from './pages/ContractsPage';
 import logoUrl from './assets/logo-ae.png';
 import ConfirmDialog from './components/ConfirmDialog';
 import ActivationPage from './pages/ActivationPage';
+import LoadingScreen from './components/LoadingScreen';
 
 const TABS = [
   { id: 'dashboard' as TabId, label: 'Tableau de bord', icon: LayoutDashboard },
   { id: 'crew' as TabId, label: 'Équipage', icon: Users },
   { id: 'ships' as TabId, label: 'Navires', icon: FileText },
   { id: 'crewlists' as TabId, label: "Listes d'équipage", icon: FileText },
-  { id: 'checklist' as TabId, label: 'Checklist', icon: CheckSquare },
   { id: 'contracts' as TabId, label: 'Contrats', icon: FileSignature },
   { id: 'history' as TabId, label: 'Historique exports', icon: History },
   { id: 'account' as TabId, label: 'Mon compte', icon: UserCircle },
@@ -46,6 +45,7 @@ type AuthState =
   | 'import-account-from-setup'   // ← depuis SetupFlow
   | 'import-account-from-login'   // ← depuis LoginPin
   | 'activation'
+  | 'transitioning'
   | 'ok'
   | 'logging-out';
 
@@ -59,6 +59,7 @@ export default function App() {
   const [editingList, setEditingList] = useState<CrewList | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -128,24 +129,31 @@ export default function App() {
   const handleLoginSuccess = async () => {
     const active = await isSubscriptionActive();
     if (active) {
-      // Enregistrer la session
+      setTab('dashboard');
+      setAuthState('transitioning');
       sessionStorage.setItem(SESSION_KEY, 'true');
-      setTimeout(() => setAuthState('ok'), 0);
+      // Délai de transition
+      setTimeout(() => setAuthState('ok'), 900);
     } else {
       sessionStorage.removeItem(SESSION_KEY);
       setTimeout(() => setAuthState('activation'), 0);
     }
-    setTab('dashboard');
   };
 
-  // ── Déconnexion ──
+  // ── Déconnexion avec confirmation
   const handleLogout = () => {
-    // Effacer la session
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = () => {
+    setShowLogoutConfirm(false);
     sessionStorage.removeItem(SESSION_KEY);
     setSidebarOpen(false);
     setAuthState('logging-out');
-    setShowExitConfirm(false);
-    setTimeout(() => { setTab('dashboard'); setAuthState('login'); }, 2000);
+    setTimeout(() => {
+      setTab('dashboard');
+      setAuthState('login');
+    }, 2000);
   };
 
   const navigate = (id: TabId) => {
@@ -163,10 +171,15 @@ export default function App() {
 
   // ── Écrans auth ───────────────────────────────────────────────────
   if (authState === 'loading') return (
-    <div className="min-h-screen bg-navy-900 flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-ocean-500
-        border-t-transparent rounded-full animate-spin" />
-    </div>
+    <LoadingScreen message="Initialisation..." />
+  );
+
+  if (authState === 'transitioning') return (
+    <LoadingScreen message="Chargement..." />
+  );
+
+  if (authState === 'logging-out') return (
+    <LoadingScreen message="Déconnexion en cours..." />
   );
 
   if (authState === 'setup')
@@ -210,12 +223,6 @@ export default function App() {
       />
     );
 
-  if (authState === 'logging-out') return (
-    <div className="min-h-screen bg-navy-900 flex items-center justify-center fade-out">
-      <div className="w-8 h-8 border-2 border-ocean-500
-        border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
 
   // ── App shell ─────────────────────────────────────────────────────
   return (
@@ -303,7 +310,6 @@ export default function App() {
                 onBack={() => setShowForm(false)}
               />
             )}
-            {tab === 'checklist' && <ChecklistPage />}
             {tab === 'contracts' && <ContractsPage />}
             {tab === 'history' && <HistoryPage />}
             {tab === 'account' && <AccountPage />}
@@ -321,6 +327,17 @@ export default function App() {
         danger
         onConfirm={handleLogout}
         onCancel={() => setShowExitConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={showLogoutConfirm}
+        title="Déconnexion"
+        message="Voulez-vous vous déconnecter ?"
+        confirmLabel="Se déconnecter"
+        cancelLabel="Annuler"
+        danger
+        onConfirm={confirmLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
       />
     </div>
   );

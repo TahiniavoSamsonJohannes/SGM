@@ -4,19 +4,21 @@ import {
     Plus, Search, FileText, Edit3, Trash2,
     Download, User, ArrowLeft,
     CheckCircle, XCircle,
+    Eye,
 } from 'lucide-react';
 import {
     db, type Contract, type CrewMember,
     computeContractTotals, isContractActive,
     addOrIncrementDynamic,
 } from '../db';
-import { generateContractPDF, type ContractPDFData } from '../pdfGenerator';
+import { generateContractPDF, previewContractPDF, type ContractPDFData } from '../pdfGenerator';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import Input from '../components/Input';
 import AutoComplete from '../components/AutoComplete';
 import DatePicker from '../components/DatePicker';
 import { fmtDate } from '../utils/fmt';
+import PdfPreviewModal from '../components/PdfPreviewModal';
 
 // ── Formatage ──────────────────────────────────────────────────────────────────
 function fmtNumber(n: number) {
@@ -69,6 +71,71 @@ export default function ContractsPage() {
     const [showNewMember, setShowNewMember] = useState(false);
     const [newMemberForm, setNewMemberForm] = useState(emptyMemberForm());
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+    // Ajouter les états preview
+    const [previewUrl, setPreviewUrl] = useState('');
+    const [previewTitle, setPreviewTitle] = useState('');
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const [previewDownload, setPreviewDownload] = useState<(() => void) | undefined>();
+    const [loadingPreview, setLoadingPreview] = useState(false);
+
+    // ── Helper : construire les données PDF d'un contrat ─────────────
+    const buildPDFData = (c: Contract): ContractPDFData | null => {
+        const member = allMembers.find(m => m.id === c.crewMemberId);
+        if (!member) return null;
+        return {
+            nom: member.nom,
+            prenom: member.prenom,
+            dateNaissance: member.dateNaissance,
+            lieuNaissance: member.lieuNaissance,
+            adresse: member.adresse || '',
+            fascicule: member.fascicule,
+            shipName: c.shipName,
+            immatriculation: c.immatriculation,
+            fonction: c.fonction,
+            dateDebut: c.dateDebut,
+            dateFin: c.dateFin,
+            salaireBaseJournalier: c.salaireBaseJournalier,
+            forfaitHeuresSupp: c.forfaitHeuresSupp,
+            salaireCongeJournalier: c.salaireCongeJournalier,
+            indemRNC: c.indemRNC,
+            totalSalaireBase: c.totalSalaireBase ?? 0,
+            totalForfait: c.totalForfait ?? 0,
+            totalConge: c.totalConge ?? 0,
+            totalRNC: c.totalRNC ?? 0,
+            beneficiaire: c.beneficiaire,
+            numCompteBancaire: c.numCompteBancaire,
+            montantDelegation: c.montantDelegation,
+        };
+    };
+
+    // ── Preview ──────────────────────────────────────────────────────
+    const handlePreview = async (c: Contract) => {
+        const data = buildPDFData(c);
+        if (!data) return;
+        setLoadingPreview(true);
+        const url = await previewContractPDF(data);
+        const member = allMembers.find(m => m.id === c.crewMemberId);
+        setPreviewUrl(url);
+        setPreviewTitle(
+            `Contrat #${formatId(c.id)} — ${member?.nom ?? ''} ${member?.prenom ?? ''}`
+        );
+        setPreviewDownload(() => () => generateContractPDF(data));
+        setPreviewOpen(true);
+        setLoadingPreview(false);
+    };
+
+    // ── Téléchargement (existant, utiliser buildPDFData) ─────────────
+    const exportPDF = async (c: Contract) => {
+        const data = buildPDFData(c);
+        if (!data) return;
+        await generateContractPDF(data);
+    };
+
+    const closePreview = () => {
+        setPreviewOpen(false);
+        setPreviewUrl('');
+    };
 
     const memberSuggestions = allMembers.map(m =>
         `${m.nom.toUpperCase()} ${m.prenom}`
@@ -212,39 +279,6 @@ export default function ContractsPage() {
         setModal(null);
     };
 
-    // ── Export PDF ────────────────────────────────────────────────────
-    const exportPDF = async (c: Contract) => {
-        const member = allMembers.find(m => m.id === c.crewMemberId);
-        if (!member) return;
-
-        const pdfData: ContractPDFData = {
-            nom: member.nom,
-            prenom: member.prenom,
-            dateNaissance: member.dateNaissance,
-            lieuNaissance: member.lieuNaissance,
-            adresse: member.adresse || '',
-            fascicule: member.fascicule,
-            shipName: c.shipName,
-            immatriculation: c.immatriculation,
-            fonction: c.fonction,
-            dateDebut: c.dateDebut,
-            dateFin: c.dateFin,
-            salaireBaseJournalier: c.salaireBaseJournalier,
-            forfaitHeuresSupp: c.forfaitHeuresSupp,
-            salaireCongeJournalier: c.salaireCongeJournalier,
-            indemRNC: c.indemRNC,
-            totalSalaireBase: c.totalSalaireBase ?? 0,
-            totalForfait: c.totalForfait ?? 0,
-            totalConge: c.totalConge ?? 0,
-            totalRNC: c.totalRNC ?? 0,
-            beneficiaire: c.beneficiaire,
-            numCompteBancaire: c.numCompteBancaire,
-            montantDelegation: c.montantDelegation,
-        };
-
-        await generateContractPDF(pdfData);
-    };
-
     // ── Tri et filtre ─────────────────────────────────────────────────
     const sorted = [...contracts].sort((a, b) =>
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -363,15 +397,24 @@ export default function ContractsPage() {
                                         Total : {fmtNumber(computeContractTotals(c).totalGeneral)} Ar/mois
                                     </div>
                                 </div>
+                                {/* Boutons actions */}
                                 <div className="flex gap-1 flex-shrink-0"
                                     onClick={e => e.stopPropagation()}>
+                                    <button onClick={() => handlePreview(c)}
+                                        disabled={loadingPreview}
+                                        title="Aperçu PDF"
+                                        className="text-slate-400 hover:text-ocean-400 transition p-1.5
+      disabled:opacity-50">
+                                        <Eye size={15} />
+                                    </button>
+                                    <button onClick={() => exportPDF(c)}
+                                        title="Télécharger PDF"
+                                        className="text-slate-400 hover:text-ocean-400 transition p-1.5">
+                                        <Download size={15} />
+                                    </button>
                                     <button onClick={() => openEdit(c)}
                                         className="text-slate-400 hover:text-amber-400 transition p-1.5">
                                         <Edit3 size={15} />
-                                    </button>
-                                    <button onClick={() => exportPDF(c)}
-                                        className="text-slate-400 hover:text-ocean-400 transition p-1.5">
-                                        <Download size={15} />
                                     </button>
                                     <button onClick={() => setDeleting(c)}
                                         className="text-slate-400 hover:text-rose-400 transition p-1.5">
@@ -822,6 +865,15 @@ export default function ContractsPage() {
                 </div>
             </Modal>
 
+
+
+
+
+
+
+
+
+
             {/* ── Modal détail ── */}
             <Modal open={modal === 'detail'} onClose={() => { setModal(null); setViewing(null); }}
                 title={`Contrat #${formatId(viewing?.id)}`} maxWidth="max-w-lg">
@@ -888,12 +940,17 @@ export default function ContractsPage() {
                         <div className="flex justify-end gap-2">
                             <button onClick={() => { setModal(null); openEdit(viewing); }}
                                 className="flex items-center gap-2 bg-navy-700 hover:bg-navy-600
-                  text-white px-4 py-2 rounded-lg text-sm border border-navy-500 transition">
+      text-white px-4 py-2 rounded-lg text-sm border border-navy-500 transition">
                                 <Edit3 size={14} /> Modifier
+                            </button>
+                            <button onClick={() => handlePreview(viewing)}
+                                className="flex items-center gap-2 bg-navy-700 hover:bg-navy-600
+      text-white px-4 py-2 rounded-lg text-sm border border-navy-500 transition">
+                                <Eye size={14} /> Aperçu
                             </button>
                             <button onClick={() => exportPDF(viewing)}
                                 className="flex items-center gap-2 bg-ocean-600 hover:bg-ocean-500
-                  text-white px-4 py-2 rounded-lg text-sm transition">
+      text-white px-4 py-2 rounded-lg text-sm transition">
                                 <Download size={14} /> PDF
                             </button>
                         </div>
@@ -912,6 +969,14 @@ export default function ContractsPage() {
                     setDeleting(null);
                 }}
                 onCancel={() => setDeleting(null)}
+            />
+
+            <PdfPreviewModal
+                open={previewOpen}
+                url={previewUrl}
+                title={previewTitle}
+                onClose={closePreview}
+                onDownload={previewDownload}
             />
         </div>
     );

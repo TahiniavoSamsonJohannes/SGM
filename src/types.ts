@@ -1,1 +1,1 @@
-export type TabId = 'dashboard' | 'crew' | 'ships' | 'crewlists' | 'contracts' | 'checklist' | 'history' | 'account' | 'data';
+export type TabId = 'dashboard' | 'crew' | 'ships' | 'crewlists' | 'contracts' | 'history' | 'account' | 'data';

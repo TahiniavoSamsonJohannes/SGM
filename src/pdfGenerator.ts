@@ -47,15 +47,11 @@ async function loadLogo(name: string): Promise<HTMLImageElement | null> {
     });
 }
 
-// ─── LISTE D'ÉQUIPAGE — reproduit exactement le template fourni ───────────────
-
-export async function generateCrewListPDF(list: CrewList): Promise<void> {
+// ── Builders internes ─────────────────────────────────────────────
+async function buildCrewListDoc(list: CrewList): Promise<jsPDF> {
     const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4',
-        putOnlyUsedFonts: true,
-        floatPrecision: 'smart',
+        orientation: 'landscape', unit: 'mm', format: 'a4',
+        putOnlyUsedFonts: true, floatPrecision: 'smart',
     } as any);
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -242,29 +238,13 @@ export async function generateCrewListPDF(list: CrewList): Promise<void> {
     y += 10;
     doc.text('Le Capitaine', 15 + col[0], y);
 
-    // ── Sauvegarde ────────────────────────────────────────────────────
-    const filename = buildFilename('AE_LISTE_EQUIPAGE');
-    doc.save(`${filename}.pdf`);
-
-    await logExport({
-        type: 'liste',
-        filename: `${filename}.pdf`,
-        shipName: list.shipName,
-        destination: list.destination,
-        membersCount: sortedMembers.length,
-        exportedAt: new Date(),
-    });
+    return doc;
 }
 
-// ─── CHECKLIST — reproduit exactement le template fourni ─────────────────────
-
-export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
+async function buildChecklistDoc(doc_: ChecklistDoc): Promise<jsPDF> {
     const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-        putOnlyUsedFonts: true,
-        floatPrecision: 'smart',
+        orientation: 'portrait', unit: 'mm', format: 'a4',
+        putOnlyUsedFonts: true, floatPrecision: 'smart',
     } as any);
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -379,6 +359,10 @@ export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
 
     const membersWithFonction =
         await enrichMembersWithFonction(doc_.members);
+
+    console.log('DOC.MEMBERS', doc_.members);
+    console.log('MEMBER WITH FONC', membersWithFonction);
+
 
     const sortedMembers =
         sortCrewByHierarchy(membersWithFonction);
@@ -509,18 +493,42 @@ export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
     doc.setFontSize(9);
     doc.text(footLines, marginX, pageHeight - 12);
 
-    // ── Sauvegarde ────────────────────────────────────────────────────
+    return doc;
+}
+
+// ── API publique ──────────────────────────────────────────────────
+export async function generateCrewListPDF(list: CrewList): Promise<void> {
+    const doc = await buildCrewListDoc(list);
+    const filename = buildFilename('AE_LISTE_EQUIPAGE');
+    doc.save(`${filename}.pdf`);
+    await logExport({
+        type: 'liste', filename: `${filename}.pdf`,
+        shipName: list.shipName, destination: list.destination,
+        membersCount: list.members.length, exportedAt: new Date()
+    });
+}
+
+export async function previewCrewListPDF(list: CrewList): Promise<string> {
+    const doc = await buildCrewListDoc(list);
+    const blob = doc.output('blob');
+    return URL.createObjectURL(blob);
+}
+
+export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
+    const doc = await buildChecklistDoc(doc_);
     const filename = buildFilename('AE_CHECKLIST');
     doc.save(`${filename}.pdf`);
-
     await logExport({
-        type: 'checklist',
-        filename: `${filename}.pdf`,
-        shipName: doc_.shipName,
-        destination: doc_.destination,
-        membersCount: doc_.members.length,
-        exportedAt: new Date(),
+        type: 'checklist', filename: `${filename}.pdf`,
+        shipName: doc_.shipName, destination: doc_.destination,
+        membersCount: doc_.members.length, exportedAt: new Date()
     });
+}
+
+export async function previewChecklistPDF(doc_: ChecklistDoc): Promise<string> {
+    const doc = await buildChecklistDoc(doc_);
+    const blob = doc.output('blob');
+    return URL.createObjectURL(blob);
 }
 
 export interface ContractPDFData {
@@ -548,7 +556,8 @@ export interface ContractPDFData {
     montantDelegation: number;
 }
 
-export async function generateContractPDF(data: ContractPDFData): Promise<void> {
+// ── Builder interne contrat ────────────────────────────────────────
+async function buildContractDoc(data: ContractPDFData): Promise<jsPDF> {
     const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -840,20 +849,26 @@ export async function generateContractPDF(data: ContractPDFData): Promise<void> 
     doc.setFont('times', 'normal');
     doc.text('Le marin', marginX, y);
 
-    // ── Sauvegarde ─────────────────────────────────────────────────
+    return doc;
+}
+
+// ── API publique contrat ───────────────────────────────────────────
+export async function generateContractPDF(data: ContractPDFData): Promise<void> {
+    const doc = await buildContractDoc(data);
     const now = new Date();
     const pad2 = (n: number) => String(n).padStart(2, '0');
     const dateStr = `${pad2(now.getDate())}${pad2(now.getMonth() + 1)}${now.getFullYear()}`;
     const filename = `AE_CONTRAT_${data.nom.toUpperCase()}_${dateStr}_${now.getTime()}.pdf`;
-
     doc.save(filename);
-
     await logExport({
-        type: 'liste',          // réutilise le type existant
-        filename,
-        shipName: data.shipName,
-        destination: data.fonction,
-        membersCount: 1,
-        exportedAt: now,
+        type: 'liste', filename,
+        shipName: data.shipName, destination: data.fonction,
+        membersCount: 1, exportedAt: now,
     });
+}
+
+export async function previewContractPDF(data: ContractPDFData): Promise<string> {
+    const doc = await buildContractDoc(data);
+    const blob = doc.output('blob');
+    return URL.createObjectURL(blob);
 }

@@ -296,7 +296,7 @@ function RenewSubscriptionPage({ onBack }: { onBack: () => void }) {
             </div>
 
             {/* Contact */}
-            <div className="bg-navy-700/60 rounded-xl p-3 space-y-2">
+            <div className="bg-navy-700/60 border border-navy-600 rounded-xl p-3 space-y-2">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     Contactez-nous
                 </p>

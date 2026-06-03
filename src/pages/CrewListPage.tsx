@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
     Save, Download, Search, AlertCircle, CheckSquare, ArrowLeft,
 } from 'lucide-react';
-import { db, enrichMembersWithFonction, type CrewList, type CrewMemberWithFonction } from '../db';
+import { db, enrichCrewListMembers, enrichMembersWithFonction, type CrewList, type CrewMemberWithFonction } from '../db';
 import { generateCrewListPDF } from '../pdfGenerator';
 import AutoComplete from '../components/AutoComplete';
 import Input from '../components/Input';
@@ -155,6 +155,16 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
         if (!validate() || !selectedShip) return;
 
         const now = new Date();
+
+        // Enrichir les membres avec toutes leurs données avant sauvegarde
+        const fullMembers = await enrichCrewListMembers(
+            selectedMembers.map(m => ({
+                id: m.id!,
+                nom: m.nom,
+                prenom: m.prenom,
+            }))
+        );
+
         const data = {
             shipId: selectedShip.id!,
             shipName: selectedShip.nom,
@@ -162,7 +172,7 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
             lieuDepart,
             destination,
             referDossier,
-            members: selectedMembers,
+            members: fullMembers,   // ← membres complets avec fonction + age
             updatedAt: now,
         };
 
