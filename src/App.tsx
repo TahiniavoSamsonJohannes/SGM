@@ -126,7 +126,6 @@ export default function App() {
 
   // ── Après connexion PIN réussie ──
   const handleLoginSuccess = async () => {
-    setTab('dashboard');
     const active = await isSubscriptionActive();
     if (active) {
       // Enregistrer la session
@@ -136,6 +135,7 @@ export default function App() {
       sessionStorage.removeItem(SESSION_KEY);
       setTimeout(() => setAuthState('activation'), 0);
     }
+    setTab('dashboard');
   };
 
   // ── Déconnexion ──

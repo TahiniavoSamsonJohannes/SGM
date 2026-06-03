@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { setupAccount, generateMachineCode } from '../db';
 import PinKeypad, { PinDots } from '../components/PinKeypad';
@@ -25,11 +25,6 @@ export default function SetupFlow({ onAccountCreated, onHasAccount }: Props) {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // Persister l'email
-    useEffect(() => {
-        if (email) localStorage.setItem(LS_EMAIL, email);
-    }, [email]);
-
     // ── Retour arrière (uniquement entre email et pin) ─────────────
     const canGoBack = step === 'pin';  // confirm ne peut plus revenir après validation
 
@@ -43,12 +38,16 @@ export default function SetupFlow({ onAccountCreated, onHasAccount }: Props) {
         if (!email.includes('@') || !email.includes('.')) {
             setError('Adresse email invalide'); return;
         }
+        localStorage.setItem(LS_EMAIL, email);
         setError('');
-        setStep('pin');
+        setTimeout(() => setStep('pin'), 0);
     };
 
     // ── PIN ────────────────────────────────────────────────────────
     const handlePinKey = useCallback(async (k: string) => {
+        console.log(step);
+        
+        if(step === 'email') return;
         setError('');
         const isConfirm = step === 'confirm';
         const current = isConfirm ? confirmPin : pin;
@@ -70,14 +69,14 @@ export default function SetupFlow({ onAccountCreated, onHasAccount }: Props) {
 
             // Confirmation
             if (current !== pin) {
-                setError('Les PIN ne correspondent pas — recommencez');
+                setError('Les PIN ne correspondent pas. Recommencez');
                 setPin('');
                 setConfirmPin('');
                 setTimeout(() => setStep('pin'), 800);
                 return;
             }
 
-            // ── Compte créé → ActivationPage directement ───────────────
+            // ── Compte créé → ActivationPage directement
             setLoading(true);
             try {
                 const mc = await generateMachineCode(email);
@@ -100,9 +99,9 @@ export default function SetupFlow({ onAccountCreated, onHasAccount }: Props) {
     const currentPin = step === 'confirm' ? confirmPin : pin;
 
     const stepLabels: Record<Step, string> = {
-        email: 'Étape 1 / 3 — Email',
-        pin: 'Étape 2 / 3 — Création du PIN',
-        confirm: 'Étape 3 / 3 — Confirmation du PIN',
+        email: 'Étape 1 sur 3',
+        pin: 'Étape 2 sur 3',
+        confirm: 'Étape 3 sur 3',
     };
 
     return (

@@ -5,6 +5,7 @@ import { db, enrichMembersWithFonction, type CrewMemberWithFonction } from '../d
 import { generateChecklistPDF } from '../pdfGenerator';
 import AutoComplete from '../components/AutoComplete';
 import { sortCrewByHierarchy } from '../utils/crewSort';
+import { fmtDate } from '../utils/fmt';
 
 // Formate l'id en 10 chiffres
 function formatId(id: number | undefined): string {
@@ -22,8 +23,7 @@ export default function ChecklistPage() {
 
     // Label affiché dans l'autocomplétion : ID + nom navire + destination + date
     const suggestions = lists.map(l =>
-        `#${formatId(l.id)} — ${l.shipName} → ${l.destination} (${new Date(l.updatedAt).toLocaleDateString('fr-FR')
-        })`
+        `#${formatId(l.id)} — ${l.shipName} ${l.lieuDepart} → ${l.destination}\n(${fmtDate(new Date(l.updatedAt))})`
     );
 
     const selectedList = lists.find((_, idx) =>

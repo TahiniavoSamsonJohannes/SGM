@@ -3,11 +3,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
     Save, Download, Search, AlertCircle, CheckSquare, ArrowLeft,
 } from 'lucide-react';
-import { db, type CrewList } from '../db';
+import { db, enrichMembersWithFonction, type CrewList, type CrewMemberWithFonction } from '../db';
 import { generateCrewListPDF } from '../pdfGenerator';
 import AutoComplete from '../components/AutoComplete';
 import Input from '../components/Input';
 import CustomSelect from '../components/CustomSelect';
+import { sortCrewByHierarchy } from '../utils/crewSort';
 
 interface Props {
     editingList?: CrewList | null;
@@ -24,12 +25,13 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
     const allMembers = useLiveQuery(() =>
         db.crewMembers.orderBy('nom').toArray()
     ) ?? [];
+    const [membersWithFonction, setMembersWithFonction] =
+        useState<CrewMemberWithFonction[]>([]);
+
     const ships = useLiveQuery(() => db.ships.toArray()) ?? [];
-    const captains = useLiveQuery(() =>
-        db.crewMembers
-            .filter(m => m.fonction.toUpperCase().includes('CAPITAINE'))
-            .toArray()
-    ) ?? [];
+    const captains = membersWithFonction.filter(m =>
+        m.fonction.toUpperCase().includes('CAPITAINE')
+    );
 
     const [shipId, setShipId] = useState('');
     const [capitaine, setCapitaine] = useState('');
@@ -46,6 +48,11 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
     // Capitaine auto-sélection
     const [capitaineError, setCapitaineError] = useState('');
     const lastAutoSelectedCapRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        enrichMembersWithFonction(allMembers)
+            .then(setMembersWithFonction);
+    }, [allMembers]);
 
     // ── Pré-remplir si édition ─────────────────────────────────────────
     useEffect(() => {
@@ -113,10 +120,13 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
     const selectedShip =
         ships.find(s => s.id === Number(shipId));
 
-    const selectedMembers =
-        allMembers.filter(m => m.id && selected.includes(m.id));
+    const selectedMembers = sortCrewByHierarchy(
+        membersWithFonction.filter(
+            m => m.id && selected.includes(m.id)
+        )
+    );
 
-    const filtered = allMembers.filter(m =>
+    const filtered = membersWithFonction.filter(m =>
         `${m.nom} ${m.prenom} ${m.fonction}`
             .toLowerCase()
             .includes(search.toLowerCase())
@@ -177,7 +187,7 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
             lieuDepart,
             destination,
             referDossier,
-            members: selectedMembers,
+            members: selectedMembers.map(({ fonction, ...m }) => m),
             createdAt: editingList?.createdAt ?? new Date(),
             updatedAt: new Date(),
         });

@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
     Plus, Edit3, Trash2, Download, FileText, Search,
 } from 'lucide-react';
-import { db, type CrewList } from '../db';
+import { db, enrichMembersWithFonction, type CrewList, type CrewMemberWithFonction } from '../db';
 import { generateCrewListPDF } from '../pdfGenerator';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { fmtDateTime } from '../utils/fmt';
+import { sortCrewByHierarchy } from '../utils/crewSort';
 
 interface Props {
     onCreateNew: () => void;
@@ -28,7 +29,24 @@ export default function CrewListsPage({ onCreateNew, onEditList }: Props) {
 
     const [search, setSearch] = useState('');
     const [viewing, setViewing] = useState<CrewList | null>(null);
+    const [viewingMembers, setViewingMembers] = useState<
+        CrewMemberWithFonction[]
+    >([]);
     const [deleting, setDeleting] = useState<CrewList | null>(null);
+
+    useEffect(() => {
+        if (!viewing) {
+            setViewingMembers([]);
+            return;
+        }
+
+        enrichMembersWithFonction(viewing.members)
+            .then(members =>
+                setViewingMembers(
+                    sortCrewByHierarchy(members)
+                )
+            );
+    }, [viewing]);
 
     const confirmDelete = async () => {
         if (deleting?.id) await db.crewLists.delete(deleting.id);
@@ -201,10 +219,10 @@ export default function CrewListsPage({ onCreateNew, onEditList }: Props) {
                         {/* Membres */}
                         <div>
                             <div className="text-xs font-semibold text-slate-400 uppercase mb-2">
-                                Membres ({viewing.members.length})
+                                Membres ({viewingMembers.length})
                             </div>
                             <div className="space-y-1 max-h-40 overflow-y-auto custom-scroll pr-1">
-                                {viewing.members.map((m, i) => (
+                                {viewingMembers.map((m, i) => (
                                     <div key={i} className="flex gap-2 text-xs text-slate-400 py-0.5">
                                         <span className="text-slate-600 w-5 flex-shrink-0 text-right">
                                             {i + 1}.
