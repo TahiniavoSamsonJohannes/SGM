@@ -6,6 +6,7 @@ import Input from '../components/Input';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import logoUrl from '../assets/logo-ae.png';
+import { useDeleteAnimation } from '../hooks/useDeleteAnimation';
 
 export default function ShipsPage() {
     const ships = useLiveQuery(() => db.ships.orderBy('nom').toArray()) ?? [];
@@ -16,6 +17,7 @@ export default function ShipsPage() {
     const [form, setForm] = useState({ nom: '', immatriculation: '' });
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [deleting, setDeleting] = useState<Ship | null>(null);
+    const { triggerDelete, isDeleting } = useDeleteAnimation(300);
 
     const openAdd = () => {
         setActive(null);
@@ -80,9 +82,10 @@ export default function ShipsPage() {
         setModal(null);
     };
 
-    const confirmDelete = async () => {
-        if (deleting?.id) await db.ships.delete(deleting.id);
-        setDeleting(null);
+    const confirmDelete = async (ship: Ship) => {
+        if (!ship.id) return;
+        setDeleting(null); // fermer le ConfirmDialog immédiatement
+        await triggerDelete(ship.id, () => db.ships.delete(ship.id!));
     };
 
     const filtered = ships.filter(s =>
@@ -135,9 +138,10 @@ export default function ShipsPage() {
                     <div
                         key={s.id}
                         onClick={() => openView(s)}
-                        className="bg-navy-800 border border-navy-600 rounded-xl p-4
-              flex items-center justify-between hover:border-navy-500
-              transition cursor-pointer"
+                        className={`bg-navy-800 border border-navy-600 rounded-xl p-4
+                        flex items-center justify-between hover:border-navy-500
+                        transition cursor-pointer
+                        ${isDeleting(s.id!) ? 'item-deleting' : ''}`}
                     >
                         <div className="flex items-center gap-3 min-w-0">
                             <img
@@ -283,7 +287,7 @@ export default function ShipsPage() {
                 message={`Supprimer "${deleting?.nom}" ? Cette action est irréversible.`}
                 confirmLabel="Supprimer"
                 danger
-                onConfirm={confirmDelete}
+                onConfirm={() => deleting && confirmDelete(deleting)}
                 onCancel={() => setDeleting(null)}
             />
         </div>

@@ -13,7 +13,7 @@ export default function LoadingScreen({ message }: Props) {
             <img
                 src={rudderUrl}
                 alt="Chargement..."
-                className="w-20 h-20 object-contain opacity-80"
+                className="w-20 h-20 object-contain saturate-200 opacity-80"
                 style={{
                     animation: 'spin 2s linear infinite',
                 }}

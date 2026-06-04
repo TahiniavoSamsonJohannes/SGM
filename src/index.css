@@ -158,3 +158,27 @@ body {
     display: none !important;
   }
 }
+
+/* Animation de suppression d'un item de liste */
+@keyframes itemDelete {
+  0% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  10% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95);
+    max-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+.item-deleting {
+  animation: itemDelete 1s ease-out forwards;
+  pointer-events: none;
+  overflow: hidden;
+}

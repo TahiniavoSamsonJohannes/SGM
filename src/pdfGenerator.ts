@@ -360,10 +360,6 @@ async function buildChecklistDoc(doc_: ChecklistDoc): Promise<jsPDF> {
     const membersWithFonction =
         await enrichMembersWithFonction(doc_.members);
 
-    console.log('DOC.MEMBERS', doc_.members);
-    console.log('MEMBER WITH FONC', membersWithFonction);
-
-
     const sortedMembers =
         sortCrewByHierarchy(membersWithFonction);
 

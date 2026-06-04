@@ -13,6 +13,7 @@ import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PdfPreviewModal from '../components/PdfPreviewModal';
 import { fmtDateTime } from '../utils/fmt';
+import { useDeleteAnimation } from '../hooks/useDeleteAnimation';
 
 interface Props {
     onCreateNew: () => void;
@@ -59,6 +60,7 @@ export default function CrewListsPage({ onCreateNew, onEditList }: Props) {
     const [search, setSearch] = useState('');
     const [viewing, setViewing] = useState<CrewList | null>(null);
     const [deleting, setDeleting] = useState<CrewList | null>(null);
+    const { triggerDelete, isDeleting } = useDeleteAnimation(300);
 
     // Preview
     const [previewUrl, setPreviewUrl] = useState('');
@@ -67,9 +69,10 @@ export default function CrewListsPage({ onCreateNew, onEditList }: Props) {
     const [previewDownload, setPreviewDownload] = useState<(() => void) | undefined>();
     const [loadingPreview, setLoadingPreview] = useState<string | null>(null);
 
-    const confirmDelete = async () => {
-        if (deleting?.id) await db.crewLists.delete(deleting.id);
+    const confirmDelete = async (crewList: CrewList) => {
+        if (!crewList.id) return;
         setDeleting(null);
+        await triggerDelete(crewList.id, () => db.crewLists.delete(crewList.id));
     };
 
     const filtered = lists.filter(l =>
@@ -164,8 +167,10 @@ export default function CrewListsPage({ onCreateNew, onEditList }: Props) {
                     </div>
                 ) : filtered.map(l => (
                     <div key={l.id} onClick={() => setViewing(l)}
-                        className="bg-navy-800 border border-navy-600 rounded-xl p-4
-              hover:border-navy-500 transition cursor-pointer">
+                        className={`bg-navy-800 border border-navy-600 rounded-xl p-4
+                        hover:border-navy-500 transition cursor-pointer
+                        ${isDeleting(l.id!) ? 'item-deleting' : ''}`}
+                    >
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
 
@@ -338,7 +343,7 @@ export default function CrewListsPage({ onCreateNew, onEditList }: Props) {
                 title="Supprimer la liste"
                 message={`Supprimer la liste de "${deleting?.shipName}" ? Irréversible.`}
                 confirmLabel="Supprimer" danger
-                onConfirm={confirmDelete}
+                onConfirm={() => deleting && confirmDelete(deleting)}
                 onCancel={() => setDeleting(null)}
             />
 

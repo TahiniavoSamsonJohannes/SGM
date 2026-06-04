@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, Users, FileText, Ship,
   History, UserCircle, LogOut, Menu, FileSignature,
@@ -63,6 +63,68 @@ export default function App() {
 
   const LS_TAB = "ae_active_tab";
 
+  // Ajouter ces refs au début du composant App
+  const sidebarOpenRef = useRef(sidebarOpen);
+  const tabRef = useRef(tab);
+  const authStateRef = useRef(authState);
+
+
+  const navigate = (id: TabId) => {
+    if (id !== 'crewlists') { setEditingList(null); setShowForm(false); }
+    setTab(id);
+    localStorage.setItem(LS_TAB, id);
+    setSidebarOpen(false);
+  };
+
+  // Synchroniser les refs à chaque render
+  useEffect(() => { sidebarOpenRef.current = sidebarOpen; }, [sidebarOpen]);
+  useEffect(() => { tabRef.current = tab; }, [tab]);
+  useEffect(() => { authStateRef.current = authState; }, [authState]);
+
+  // Refs stables pour les setters (ne changent jamais)
+  const setSidebarOpenRef = useRef(setSidebarOpen);
+  const navigateRef = useRef(navigate);
+  const setShowLogoutConfirmRef = useRef(setShowLogoutConfirm);
+
+  // Mettre à jour les refs setters si les fonctions changent
+  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
+  useEffect(() => {
+    setShowLogoutConfirmRef.current = setShowLogoutConfirm;
+  }, [setShowLogoutConfirm]);
+
+  // ── Un seul useEffect pour le bouton Retour ───────────────────────
+  useEffect(() => {
+    // Pousser l'état initial
+    window.history.pushState({ ae: true }, '', window.location.href);
+
+    const handlePopState = () => {
+      // Repousser IMMÉDIATEMENT pour la prochaine interception
+      window.history.pushState({ ae: true }, '', window.location.href);
+
+      // P1 : modal ouvert → le fermer
+      if (modalRegistry.closeTopmost()) return;
+
+      // P2 : sidebar ouverte sur mobile
+      if (sidebarOpenRef.current) {
+        setSidebarOpenRef.current(false);
+        return;
+      }
+
+      // P3 : page ≠ dashboard
+      if (tabRef.current !== 'dashboard') {
+        navigateRef.current('dashboard');
+        return;
+      }
+
+      // P4 : déjà sur dashboard → confirmation déconnexion
+      setShowLogoutConfirmRef.current(true);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+
+  }, []);
+
   useEffect(() => {
     async function init() {
       await seedDynamicValues();
@@ -95,45 +157,6 @@ export default function App() {
     init();
   }, []);
 
-  useEffect(() => {
-    if (authState !== 'ok') return;
-
-    // Fonction qui repousse TOUJOURS un état pour le prochain retour
-    const pushState = () => {
-      window.history.pushState({ ae: true }, '', window.location.href);
-    };
-
-    const handlePopState = () => {
-      // Toujours repousser un état immédiatement
-      // pour que le prochain retour soit aussi intercepté
-      pushState();
-
-      // P1 : fermer le modal du dessus
-      if (modalRegistry.closeTopmost()) return;
-
-      // P2 : fermer la sidebar sur mobile
-      if (sidebarOpen) {
-        setSidebarOpen(false);
-        return;
-      }
-
-      // P3 : retour vers dashboard
-      if (tab !== 'dashboard') {
-        navigate('dashboard');
-        return;
-      }
-
-      // P4 : déjà sur dashboard → proposer déconnexion
-      setShowLogoutConfirm(true);
-    };
-
-    // Pousser l'état initial
-    pushState();
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-
-  }, [authState, sidebarOpen, tab]);
 
 
   // ── Après connexion PIN réussie ──
@@ -167,13 +190,6 @@ export default function App() {
       setTab('dashboard');
       setAuthState('login');
     }, 2000);
-  };
-
-  const navigate = (id: TabId) => {
-    if (id !== 'crewlists') { setEditingList(null); setShowForm(false); }
-    setTab(id);
-    localStorage.setItem(LS_TAB, id);
-    setSidebarOpen(false);
   };
 
   const handleEditList = (list: CrewList) => {

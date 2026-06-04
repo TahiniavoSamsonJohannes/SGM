@@ -12,6 +12,7 @@ import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import DatePicker from '../components/DatePicker';
 import { fmtDate } from '../utils/fmt';
+import { useDeleteAnimation } from '../hooks/useDeleteAnimation';
 
 // ── emptyForm sans fonction ────────────────────────────────────────
 function emptyForm() {
@@ -99,11 +100,14 @@ function MemberForm({
 export default function CrewPage() {
     const membersWithFonction = useLiveQuery(async () => {
         const members = await db.crewMembers.toArray();
-        
+
         if (members.length === 0) return [];
         return enrichMembersWithFonction(members);
     }, []) ?? [];
     const dynamicValues = useLiveQuery(() => db.dynamicValues.toArray()) ?? [];
+
+    const { triggerDelete, isDeleting } = useDeleteAnimation(1000);
+
 
     // Tri décroissant par updatedAt
     const members = [...membersWithFonction].sort(
@@ -193,9 +197,10 @@ export default function CrewPage() {
         setModal(null);
     };
 
-    const del = async (id: number) => {
-        await db.crewMembers.delete(id);
-        setDeleting(null);
+    const confirmDelete = async (member: CrewMember) => {
+        if (!member.id) return;
+        setDeleting(null); // fermer le ConfirmDialog immédiatement
+        await triggerDelete(member.id, () => db.crewMembers.delete(member.id!));
     };
 
     const filtered = members.filter(m =>
@@ -240,10 +245,14 @@ export default function CrewPage() {
                     </div>
                 ) : filtered.map(m => {
                     return (
-                        <div key={m.id} onClick={() => openView(m)}
-                            className="bg-navy-800 border border-navy-600 rounded-xl p-4
-                flex items-center justify-between hover:border-navy-500
-                transition cursor-pointer">
+                        <div
+                            key={m.id}
+                            onClick={() => openView(m)}
+                            className={`bg-navy-800 border border-navy-600 rounded-xl p-4
+                                flex items-center justify-between hover:border-navy-500
+                                transition cursor-pointer
+                                ${isDeleting(m.id!) ? 'item-deleting' : ''}`}
+                        >
                             <div className="flex items-center gap-3 min-w-0">
                                 <div className="w-9 h-9 rounded-full bg-ocean-600/20
                   border border-ocean-600/30 flex items-center justify-center
@@ -407,9 +416,10 @@ export default function CrewPage() {
             <ConfirmDialog
                 open={!!deleting}
                 title="Supprimer le membre"
-                message={`Supprimer ${deleting?.nom} ${deleting?.prenom} ? Cette action est irréversible.`}
-                confirmLabel="Supprimer" danger
-                onConfirm={() => deleting?.id && del(deleting.id)}
+                message={`Supprimer ${deleting?.nom} ${deleting?.prenom} ?`}
+                confirmLabel="Supprimer"
+                danger
+                onConfirm={() => deleting && confirmDelete(deleting)}
                 onCancel={() => setDeleting(null)}
             />
         </div>

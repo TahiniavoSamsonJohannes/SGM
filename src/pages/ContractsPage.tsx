@@ -3,7 +3,6 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
     Plus, Search, FileText, Edit3, Trash2,
     Download, User, ArrowLeft,
-    CheckCircle, XCircle,
     Eye,
 } from 'lucide-react';
 import {
@@ -19,6 +18,7 @@ import AutoComplete from '../components/AutoComplete';
 import DatePicker from '../components/DatePicker';
 import { fmtDate } from '../utils/fmt';
 import PdfPreviewModal from '../components/PdfPreviewModal';
+import { useDeleteAnimation } from '../hooks/useDeleteAnimation';
 
 // ── Formatage ──────────────────────────────────────────────────────────────────
 function fmtNumber(n: number) {
@@ -59,8 +59,9 @@ export default function ContractsPage() {
     const [search, setSearch] = useState('');
     const [modal, setModal] = useState<'form' | 'detail' | null>(null);
     const [editing, setEditing] = useState<Contract | null>(null);
-    const [deleting, setDeleting] = useState<Contract | null>(null);
     const [viewing, setViewing] = useState<Contract | null>(null);
+    const [deleting, setDeleting] = useState<Contract | null>(null);
+    const { triggerDelete, isDeleting } = useDeleteAnimation(300);
 
     // Formulaire contrat
     const [form, setForm] = useState(emptyContractForm());
@@ -357,8 +358,10 @@ export default function ContractsPage() {
                     const active = isContractActive(c);
                     return (
                         <div key={c.id} onClick={() => { setViewing(c); setModal('detail'); }}
-                            className="bg-navy-800 border border-navy-600 rounded-xl p-4
-                hover:border-navy-500 transition cursor-pointer">
+                            className={`bg-navy-800 border border-navy-600 rounded-xl p-4
+                            hover:border-navy-500 transition cursor-pointer
+                            ${isDeleting(c.id!) ? 'item-deleting' : ''}`}
+                        >
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2 flex-wrap">
@@ -375,8 +378,20 @@ export default function ContractsPage() {
                                         <span className={`flex items-center gap-1 text-xs font-medium
     ${active ? 'text-emerald-400' : 'text-rose-400'}`}>
                                             {active
-                                                ? <><CheckCircle size={11} /> Actif</>
-                                                : <><XCircle size={11} /> Expiré</>
+                                                ? <>
+                                                    <span className="inline-flex items-center gap-0.5 text-emerald-400
+                                                        bg-emerald-400/10 px-1.5 py-0.5 rounded-full text-xs font-medium
+                                                        flex-shrink-0">
+                                                        Actif
+                                                    </span>
+                                                </>
+                                                : <>
+                                                    <span className="inline-flex items-center gap-0.5 text-rose-400
+                                                        bg-rose-400/10 px-1.5 py-0.5 rounded-full text-xs font-medium
+                                                        flex-shrink-0">
+                                                        Expiré
+                                                    </span>
+                                                </>
                                             }
                                         </span>
                                     </div>
@@ -887,7 +902,7 @@ export default function ContractsPage() {
                                 ['Fonction', viewing.fonction],
                                 ['Début', fmtDate(new Date(viewing.dateDebut))],
                                 ['Fin', fmtDate(new Date(viewing.dateFin))],
-                                ['Statut', isContractActive(viewing) ? '✓ Actif' : '✗ Expiré'],
+                                ['Statut', isContractActive(viewing) ? 'Actif' : 'Expiré'],
                                 ['Bénéficiaire', viewing.beneficiaire],
                                 ['Compte', viewing.numCompteBancaire],
                             ] as [string, string][]).filter(([, v]) => v).map(([k, v]) => (
@@ -937,7 +952,7 @@ export default function ContractsPage() {
                             </div>
                         </div>
 
-                        <div className="flex justify-end gap-2">
+                        <div className="flex flex-col items-end sm:flex-row sm:justify-end gap-2">
                             <button onClick={() => { setModal(null); openEdit(viewing); }}
                                 className="flex items-center gap-2 bg-navy-700 hover:bg-navy-600
       text-white px-4 py-2 rounded-lg text-sm border border-navy-500 transition">
@@ -965,8 +980,10 @@ export default function ContractsPage() {
                 message={`Supprimer le contrat #${formatId(deleting?.id)} ? Cette action est irréversible.`}
                 confirmLabel="Supprimer" danger
                 onConfirm={async () => {
-                    if (deleting?.id) await db.contracts.delete(deleting.id);
+                    if (!deleting?.id) return;
+                    const id = deleting.id;
                     setDeleting(null);
+                    await triggerDelete(id, () => db.contracts.delete(id));
                 }}
                 onCancel={() => setDeleting(null)}
             />
