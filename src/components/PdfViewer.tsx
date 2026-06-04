@@ -13,7 +13,8 @@ interface Props {
 }
 
 // Scale de base × devicePixelRatio pour la netteté
-const BASE_SCALE = 1;
+const BASE_SCALE = 1.5;
+const MOBILE_BASE_SCALE = 0.7;
 
 export default function PdfViewer({ url }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -41,33 +42,39 @@ export default function PdfViewer({ url }: Props) {
 
         async function renderPDF() {
             try {
+                alert('1 - fetch start');
                 const response = await fetch(url);
                 if (cancelled) return;
-
+                
+                alert('2 - fetch done');
                 const arrayBuffer = await response.arrayBuffer();
                 if (cancelled) return;
-
+                
+                alert('3 - arrayBuffer done');
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                 if (cancelled) return;
-
+                
+                alert(`4 - pdf loaded ${pdf.numPages}`);
                 // devicePixelRatio pour rendu haute résolution
                 const dpr = window.devicePixelRatio || 1;
 
                 const isMobile = window.innerWidth < 768;
-
+                
                 const scale = isMobile
-                    ? BASE_SCALE // pas de DPR sur mobile
-                    : BASE_SCALE * dpr;
-
+                ? MOBILE_BASE_SCALE * dpr // pas de DPR sur mobile
+                : BASE_SCALE * dpr;
+                
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    alert(`5 - page start ${pageNum}`);
                     if (cancelled) return;
-
+                    
                     const page = await pdf.getPage(pageNum);
                     if (cancelled) return;
-
+                    
+                    alert(`6 - page loaded ${pageNum}`);
                     // Viewport à scale élevé pour la résolution physique
                     const viewport = page.getViewport({ scale });
-
+                    
                     const canvas = document.createElement('canvas');
                     // Taille physique du canvas (haute résolution)
                     canvas.width = viewport.width;
@@ -79,17 +86,18 @@ export default function PdfViewer({ url }: Props) {
                     canvas.style.marginBottom = '8px';
                     canvas.style.background = 'white';
                     canvas.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-
+                    
                     const ctx = canvas.getContext('2d')!;
-
+                    
                     if (containerRef.current && !cancelled) {
                         containerRef.current.appendChild(canvas);
                     }
 
                     await page.render({ canvas, canvasContext: ctx, viewport }).promise;
                     if (cancelled) return;
+                    alert(`7 - page rendered ${pageNum}`);
                 }
-
+                
                 if (!cancelled) setLoading(false);
 
             } catch (err) {
