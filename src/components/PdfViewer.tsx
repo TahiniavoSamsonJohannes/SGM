@@ -13,7 +13,7 @@ interface Props {
 }
 
 // Scale de base × devicePixelRatio pour la netteté
-const BASE_SCALE = 1.5;
+const BASE_SCALE = 1;
 
 export default function PdfViewer({ url }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -22,6 +22,7 @@ export default function PdfViewer({ url }: Props) {
     // zoom CSS uniquement — pas de re-render du PDF
     const [zoom, setZoom] = useState(1);
     const renderingRef = useRef(false);
+    const isMobile = window.innerWidth < 768;
 
     // ── Rendu PDF
     useEffect(() => {
@@ -51,7 +52,12 @@ export default function PdfViewer({ url }: Props) {
 
                 // devicePixelRatio pour rendu haute résolution
                 const dpr = window.devicePixelRatio || 1;
-                const scale = BASE_SCALE * dpr;
+
+                const isMobile = window.innerWidth < 768;
+
+                const scale = isMobile
+                    ? BASE_SCALE // pas de DPR sur mobile
+                    : BASE_SCALE * dpr;
 
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                     if (cancelled) return;
@@ -188,7 +194,7 @@ export default function PdfViewer({ url }: Props) {
                     style={{
                         // Origine de transformation : haut-centre
                         transformOrigin: 'top center',
-                        transform: `scale(${zoom})`,
+                        transform: isMobile ? 'none' : `scale(${zoom})`,
                         // Ajuster la hauteur pour que le scroll fonctionne
                         // quand on zoome (le contenu s'agrandit)
                         marginBottom: zoom > 1 ? `${(zoom - 1) * 100}%` : 0,
