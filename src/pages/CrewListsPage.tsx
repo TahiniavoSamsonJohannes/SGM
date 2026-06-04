@@ -52,9 +52,6 @@ export default function CrewListsPage({ onCreateNew, onEditList }: Props) {
     const rawLists = useLiveQuery(() => db.crewLists.toArray()) ?? [];
     const ships = useLiveQuery(() => db.ships.toArray()) ?? [];
 
-    console.log('RAWLIST', rawLists);
-
-
     const lists = [...rawLists].sort(
         (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );

@@ -99,7 +99,6 @@ function MemberForm({
 export default function CrewPage() {
     const membersWithFonction = useLiveQuery(async () => {
         const members = await db.crewMembers.toArray();
-        console.log('MEMBERS', members);
         
         if (members.length === 0) return [];
         return enrichMembersWithFonction(members);

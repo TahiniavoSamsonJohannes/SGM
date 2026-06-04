@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  LayoutDashboard, Users, FileText,
+  LayoutDashboard, Users, FileText, Ship,
   History, UserCircle, LogOut, Menu, FileSignature,
 } from 'lucide-react';
 import {
@@ -27,11 +27,12 @@ import logoUrl from './assets/logo-ae.png';
 import ConfirmDialog from './components/ConfirmDialog';
 import ActivationPage from './pages/ActivationPage';
 import LoadingScreen from './components/LoadingScreen';
+import { modalRegistry } from './hooks/useModalRegistry';
 
 const TABS = [
   { id: 'dashboard' as TabId, label: 'Tableau de bord', icon: LayoutDashboard },
   { id: 'crew' as TabId, label: 'Équipage', icon: Users },
-  { id: 'ships' as TabId, label: 'Navires', icon: FileText },
+  { id: 'ships' as TabId, label: 'Navires', icon: Ship },
   { id: 'crewlists' as TabId, label: "Listes d'équipage", icon: FileText },
   { id: 'contracts' as TabId, label: 'Contrats', icon: FileSignature },
   { id: 'history' as TabId, label: 'Historique exports', icon: History },
@@ -45,7 +46,6 @@ type AuthState =
   | 'import-account-from-setup'   // ← depuis SetupFlow
   | 'import-account-from-login'   // ← depuis LoginPin
   | 'activation'
-  | 'transitioning'
   | 'ok'
   | 'logging-out';
 
@@ -61,6 +61,8 @@ export default function App() {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  const LS_TAB = "ae_active_tab";
+
   useEffect(() => {
     async function init() {
       await seedDynamicValues();
@@ -75,7 +77,12 @@ export default function App() {
         // Vérifier que l'abonnement est toujours valide
         const active = await isSubscriptionActive();
         if (active) {
-          setTab('dashboard');
+          const active_tab = localStorage.getItem(LS_TAB);
+          if (!active_tab)
+            setTab('dashboard');
+          else
+            setTab(active_tab as TabId);
+
           setAuthState('ok');
         } else {
           sessionStorage.removeItem(SESSION_KEY);
@@ -91,49 +98,55 @@ export default function App() {
   useEffect(() => {
     if (authState !== 'ok') return;
 
-    const handlePopState = (e: PopStateEvent) => {
-      console.log('PopEvent fired');
-      e.preventDefault();
+    // Fonction qui repousse TOUJOURS un état pour le prochain retour
+    const pushState = () => {
+      window.history.pushState({ ae: true }, '', window.location.href);
+    };
 
-      // P1 : un modal est ouvert — géré par les modaux eux-mêmes via stopPropagation
-      // On pousse un état pour intercepter le prochain retour
-      window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      // Toujours repousser un état immédiatement
+      // pour que le prochain retour soit aussi intercepté
+      pushState();
 
-      // P2 : sidebar visible sur mobile
+      // P1 : fermer le modal du dessus
+      if (modalRegistry.closeTopmost()) return;
+
+      // P2 : fermer la sidebar sur mobile
       if (sidebarOpen) {
         setSidebarOpen(false);
         return;
       }
 
-      // P3 : page ≠ dashboard
+      // P3 : retour vers dashboard
       if (tab !== 'dashboard') {
         navigate('dashboard');
         return;
       }
 
-
-      // P4 : déjà sur dashboard → demander confirmation
-      setShowExitConfirm(true);
+      // P4 : déjà sur dashboard → proposer déconnexion
+      setShowLogoutConfirm(true);
     };
 
-    // Pousser un état initial pour avoir quelque chose à "dépiler"
-    //console.log('AddStack');
+    // Pousser l'état initial
+    pushState();
 
-    window.history.pushState(null, '', window.location.href);
     window.addEventListener('popstate', handlePopState);
-
     return () => window.removeEventListener('popstate', handlePopState);
+
   }, [authState, sidebarOpen, tab]);
+
 
   // ── Après connexion PIN réussie ──
   const handleLoginSuccess = async () => {
     const active = await isSubscriptionActive();
     if (active) {
-      setTab('dashboard');
-      setAuthState('transitioning');
+      setAuthState('loading');
       sessionStorage.setItem(SESSION_KEY, 'true');
       // Délai de transition
-      setTimeout(() => setAuthState('ok'), 900);
+      setTimeout(() => {
+        setAuthState('ok');
+        setTab('dashboard');
+      }, 2000);
     } else {
       sessionStorage.removeItem(SESSION_KEY);
       setTimeout(() => setAuthState('activation'), 0);
@@ -159,6 +172,7 @@ export default function App() {
   const navigate = (id: TabId) => {
     if (id !== 'crewlists') { setEditingList(null); setShowForm(false); }
     setTab(id);
+    localStorage.setItem(LS_TAB, id);
     setSidebarOpen(false);
   };
 
@@ -169,17 +183,13 @@ export default function App() {
     setSidebarOpen(false);
   };
 
-  // ── Écrans auth ───────────────────────────────────────────────────
+  // ── Écrans auth
   if (authState === 'loading') return (
-    <LoadingScreen message="Initialisation..." />
-  );
-
-  if (authState === 'transitioning') return (
     <LoadingScreen message="Chargement..." />
   );
 
   if (authState === 'logging-out') return (
-    <LoadingScreen message="Déconnexion en cours..." />
+    <LoadingScreen message="Déconnexion..." />
   );
 
   if (authState === 'setup')
@@ -193,7 +203,7 @@ export default function App() {
   if (authState === 'activation')
     return (
       <ActivationPage
-        onDone={() => setAuthState('login')}
+        onDone={() => { setAuthState('loading'); setTimeout(() => setAuthState('login'), 2000) }}
         onGoToLogin={() => setAuthState('login')}
       />
     );
@@ -201,7 +211,7 @@ export default function App() {
   if (authState === 'import-account-from-setup')
     return (
       <ImportAccount
-        onImported={() => setAuthState('login')}
+        onImported={() => { setAuthState('loading'); setTimeout(() => setAuthState('login'), 2000) }}
         onBack={() => setAuthState('setup')}          // ← retour vers SetupFlow
       />
     );
@@ -209,7 +219,7 @@ export default function App() {
   if (authState === 'import-account-from-login')
     return (
       <ImportAccount
-        onImported={() => setAuthState('login')}
+        onImported={() => { setAuthState('loading'); setTimeout(() => setAuthState('login'), 2000) }}
         onBack={() => setAuthState('login')}           // ← retour vers LoginPin
       />
     );
@@ -293,7 +303,7 @@ export default function App() {
         </header>
 
         <main className="flex-1 overflow-y-auto custom-scroll pb-safe">
-          <div className="p-4 sm:p-6 max-w-4xl mx-auto pb-safe">
+          <div className="p-4 sm:p-6 max-w-4xl mx-auto">
             {tab === 'dashboard' && <Dashboard setTab={navigate} />}
             {tab === 'crew' && <CrewPage />}
             {tab === 'ships' && <ShipsPage />}
@@ -319,25 +329,14 @@ export default function App() {
       </div>
 
       <ConfirmDialog
-        open={showExitConfirm}
-        title="Déconnexion"
-        message="Voulez-vous vous déconnectez ?"
-        confirmLabel="Se déconnecter"
-        cancelLabel="Annuler"
-        danger
-        onConfirm={handleLogout}
-        onCancel={() => setShowExitConfirm(false)}
-      />
-
-      <ConfirmDialog
-        open={showLogoutConfirm}
+        open={showLogoutConfirm || showExitConfirm}
         title="Déconnexion"
         message="Voulez-vous vous déconnecter ?"
         confirmLabel="Se déconnecter"
         cancelLabel="Annuler"
         danger
         onConfirm={confirmLogout}
-        onCancel={() => setShowLogoutConfirm(false)}
+        onCancel={() => { setShowLogoutConfirm(false); setShowExitConfirm(false) }}
       />
     </div>
   );
