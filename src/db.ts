@@ -151,13 +151,13 @@ class MaritimeDB extends Dexie {
 
     constructor() {
         super('MaritimeDB');
-        this.version(10).stores({
+        this.version(11).stores({
             crewMembers: '++id, nom, prenom, fascicule, nationalite',
             ships: '++id, nom, immatriculation',
             crewLists: '++id, shipId, updatedAt',
             checklistDocs: '++id, crewListId, createdAt',
             exportedFiles: '++id, type, exportedAt',
-            dynamicValues: '++id, type, value',
+            dynamicValues: '++id, &[type+value], type, value',
             authConfig: '++id',
             deviceConfig: '++id',
             contracts: '++id, crewMemberId, dateDebut, dateFin',
@@ -187,10 +187,9 @@ export async function getOrCreateDeviceId(): Promise<string> {
 export async function seedDynamicValues() {
     const count = await db.dynamicValues.count();
     console.log('DYNAMIC VALUES', count);
-    await db.dynamicValues.clear();
     if (count === 0) {
         // Fonctions seulement — pas de fascicules ni brevets
-        await db.dynamicValues.bulkAdd([
+        await db.dynamicValues.bulkPut([
             { type: 'fonction', value: 'CAPITAINE', usageCount: 0 },
             { type: 'fonction', value: 'SECOND CAPITAINE', usageCount: 0 },
             { type: 'fonction', value: 'ÉLÈVE OQP', usageCount: 0 },

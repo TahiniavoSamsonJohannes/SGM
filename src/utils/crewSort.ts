@@ -57,9 +57,9 @@ export function sortCrewByHierarchy<T extends {
  * Retourne '—' si la date est invalide.
  */
 export function calculateAge(dateNaissance: string): string {
-    if (!dateNaissance) return '—';
+    if (!dateNaissance) return '';
     const birth = new Date(dateNaissance);
-    if (isNaN(birth.getTime())) return '—';
+    if (isNaN(birth.getTime())) return '';
     const today = new Date();
     let age = today.getFullYear() - birth.getFullYear();
     const m = today.getMonth() - birth.getMonth();
