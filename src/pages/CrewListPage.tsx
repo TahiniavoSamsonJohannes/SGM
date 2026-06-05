@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
     Save, Download, Search, AlertCircle, CheckSquare, ArrowLeft,
 } from 'lucide-react';
-import { db, enrichCrewListMembers, enrichMembersWithFonction, type CrewList, type CrewMemberWithFonction } from '../db';
+import { db, enrichCrewListMembers, enrichMembersWithFonction, type CrewList } from '../db';
 import { generateCrewListPDF } from '../pdfGenerator';
 import AutoComplete from '../components/AutoComplete';
 import Input from '../components/Input';
@@ -22,11 +22,13 @@ function formatId(id: number | undefined): string {
 }
 
 export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
-    const allMembers = useLiveQuery(() =>
-        db.crewMembers.orderBy('nom').toArray()
-    ) ?? [];
-    const [membersWithFonction, setMembersWithFonction] =
-        useState<CrewMemberWithFonction[]>([]);
+
+    const membersWithFonction = useLiveQuery(async () => {
+        const members = await db.crewMembers.toArray();
+
+        if (members.length === 0) return [];
+        return enrichMembersWithFonction(members);
+    }, []) ?? [];
 
     const ships = useLiveQuery(() => db.ships.toArray()) ?? [];
     const captains = membersWithFonction.filter(m =>
@@ -49,10 +51,6 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
     const [capitaineError, setCapitaineError] = useState('');
     const lastAutoSelectedCapRef = useRef<number | null>(null);
 
-    useEffect(() => {
-        enrichMembersWithFonction(allMembers)
-            .then(setMembersWithFonction);
-    }, [allMembers]);
 
     // ── Pré-remplir si édition ─────────────────────────────────────────
     useEffect(() => {
@@ -81,7 +79,7 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
             return;
         }
 
-        const match = allMembers.find(m =>
+        const match = membersWithFonction.find(m =>
             `${m.nom.toUpperCase()} ${m.prenom.toUpperCase()}` ===
             capitaine.toUpperCase().trim()
         );
@@ -111,7 +109,7 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
                 lastAutoSelectedCapRef.current = null;
             }
         }
-    }, [capitaine, allMembers]);
+    }, [capitaine, membersWithFonction]);
 
     // ── Dérivés ────────────────────────────────────────────────────────
     const captainSuggestions =
@@ -343,7 +341,7 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
                     <p className="text-rose-400 text-xs">{errors.members}</p>
                 )}
 
-                {allMembers.length === 0 ? (
+                {membersWithFonction.length === 0 ? (
                     <div className="text-center text-slate-500 py-5 text-sm">
                         <AlertCircle size={18} className="mx-auto mb-2 opacity-40" />
                         Ajoutez d'abord des membres
