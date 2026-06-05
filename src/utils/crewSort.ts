@@ -28,9 +28,7 @@ export function getFonctionRank(fonction: string): number {
         return FONCTION_ORDER.length;
     }
 
-    const index = FONCTION_ORDER.findIndex(
-        f => normalized.includes(f) || f.includes(normalized)
-    );
+    const index = FONCTION_ORDER.indexOf(normalized);
 
     return index === -1 ? FONCTION_ORDER.length : index;
 }

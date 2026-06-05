@@ -127,9 +127,12 @@ export default function App() {
 
   useEffect(() => {
     async function init() {
+      console.log('init start');
+      
       await seedDynamicValues();
       const first = await isFirstLaunch();
       if (first) {
+        console.log('first init');
         setAuthState('setup');
         return;
       }

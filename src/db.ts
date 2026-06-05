@@ -24,12 +24,14 @@ export interface CrewMember {
     updatedAt: Date;
 }
 
+export type FONCTION_TYPE = 'CAPITAINE' | 'SECOND CAPITAINE' | 'ÉLÈVE OQP' | 'CHEF MÉCANICIEN' | 'SECOND MÉCANICIEN' | 'TROISIÈME MÉCANICIEN' | 'MAITRE GRAISSEUR' | 'GRAISSEUR' | 'CHEF DE QUART' | 'BOSCO' | 'SECOND BOSCO' | 'MATELOT QUALIFIÉ PONT' | 'MATELOT' | 'CUISINIER' | 'SECOND CUISINIER';
+
 export interface Contract {
     id?: number;
     crewMemberId: number;
     shipName: string;
     immatriculation: string;
-    fonction: string;
+    fonction: FONCTION_TYPE;
     dateDebut: string;
     dateFin: string;
     salaireBaseJournalier: number;
@@ -184,6 +186,8 @@ export async function getOrCreateDeviceId(): Promise<string> {
 
 export async function seedDynamicValues() {
     const count = await db.dynamicValues.count();
+    console.log('DYNAMIC VALUES', count);
+    await db.dynamicValues.clear();
     if (count === 0) {
         // Fonctions seulement — pas de fascicules ni brevets
         await db.dynamicValues.bulkAdd([

@@ -9,6 +9,7 @@ import {
     db, type Contract, type CrewMember,
     computeContractTotals, isContractActive,
     addOrIncrementDynamic,
+    type FONCTION_TYPE,
 } from '../db';
 import { generateContractPDF, previewContractPDF, type ContractPDFData } from '../pdfGenerator';
 import Modal from '../components/Modal';
@@ -19,6 +20,7 @@ import DatePicker from '../components/DatePicker';
 import { fmtDate } from '../utils/fmt';
 import PdfPreviewModal from '../components/PdfPreviewModal';
 import { useDeleteAnimation } from '../hooks/useDeleteAnimation';
+import { FONCTION_ORDER } from '../utils/crewSort';
 
 // ── Formatage ──────────────────────────────────────────────────────────────────
 function fmtNumber(n: number) {
@@ -31,7 +33,7 @@ function formatId(id: number | undefined) {
 // ── Formulaire vide ────────────────────────────────────────────────────────────
 function emptyContractForm(): Omit<Contract, 'id' | 'crewMemberId' | 'createdAt' | 'updatedAt'> {
     return {
-        shipName: '', immatriculation: '', fonction: '',
+        shipName: '', immatriculation: '', fonction: '' as FONCTION_TYPE,
         dateDebut: '', dateFin: '',
         salaireBaseJournalier: 0, forfaitHeuresSupp: 0,
         salaireCongeJournalier: 0, indemRNC: 0,
@@ -223,6 +225,7 @@ export default function ContractsPage() {
         // Validation contrat
         if (!form.shipName.trim()) errors.shipName = 'Navire requis';
         if (!form.fonction.trim()) errors.fonction = 'Fonction requise';
+        if (!FONCTION_ORDER.includes(form.fonction.trim().toUpperCase())) errors.fonction = 'Fonction invalide';
         if (!form.dateDebut) errors.dateDebut = 'Date de début requise';
         if (!form.dateFin) errors.dateFin = 'Date de fin requise';
 
@@ -665,7 +668,7 @@ export default function ContractsPage() {
                                 Fonction *
                             </label>
                             <AutoComplete value={form.fonction}
-                                onChange={v => setForm(f => ({ ...f, fonction: v }))}
+                                onChange={v => setForm(f => ({ ...f, fonction: v as FONCTION_TYPE}))}
                                 suggestions={fonctionSuggestions} placeholder="Fonction..." />
                             {formErrors.fonction && (
                                 <p className="text-rose-400 text-xs mt-1">{formErrors.fonction}</p>
