@@ -167,6 +167,7 @@ export const db = new MaritimeDB();
 
 // ─── Device ID — stocké dans IndexedDB ───────────────────────────────────────
 export async function getOrCreateDeviceId(): Promise<string> {
+    alert('create deviceId')
     // Attendre que la DB soit prête
     const existing = await db.deviceConfig.toCollection().first();
     if (existing?.deviceId) return existing.deviceId;
@@ -223,6 +224,11 @@ export async function addOrIncrementDynamic(
 const SALT = 'eustratiou_maritime_2025';
 
 export async function hashPin(pin: string): Promise<string> {
+    if (!crypto.subtle) {
+        throw new Error(
+            'Web Crypto API indisponible (contexte non sécurisé)'
+        );
+    }
     const data = new TextEncoder().encode(pin + SALT);
     const buf = await crypto.subtle.digest('SHA-256', data);
     return Array.from(new Uint8Array(buf))

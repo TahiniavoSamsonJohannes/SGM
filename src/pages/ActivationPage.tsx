@@ -117,7 +117,7 @@ export default function ActivationPage({ onDone, onGoToLogin }: Props) {
                         <div className="bg-navy-700 rounded-xl p-4 space-y-2">
                             <p className="text-xs font-semibold text-slate-400
                 uppercase tracking-wider mb-2">
-                                Contact pour activer l'abonnement
+                                Contactez-nous
                             </p>
                             <div className="flex items-center gap-2 text-sm text-slate-300">
                                 <Phone size={13} className="text-ocean-400 flex-shrink-0" />

@@ -19,7 +19,7 @@ function emptyForm() {
     return {
         nom: '', prenom: '', fascicule: '', brevets: '',
         dateNaissance: '', lieuNaissance: '', adresse: '',
-        telephone: '', email: '', nationalite: '',
+        telephone: '', email: '', nationalite: 'MALAGASY',
     };
 }
 
@@ -79,7 +79,7 @@ function MemberForm({
             <Input label="Téléphone *" type="tel" value={form.telephone}
                 onChange={e => setForm(f => ({ ...f, telephone: e.target.value }))}
                 placeholder="+261..." />
-            <Input label="Email *" type="email" value={form.email}
+            <Input label="Email" type="email" value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 placeholder="email@..." />
 
@@ -152,7 +152,6 @@ export default function CrewPage() {
         if (!form.lieuNaissance.trim()) required.lieu = 'Lieu de naissance requis';
         if (!form.adresse.trim()) required.adresse = 'Adresse requise';
         if (!form.telephone.trim()) required.tel = 'Téléphone requis';
-        if (!form.email.trim()) required.email = 'Email requis';
         if (!form.nationalite.trim()) required.nat = 'Nationalité requise';
 
         if (Object.keys(required).length > 0) {

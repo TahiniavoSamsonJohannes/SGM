@@ -46,8 +46,8 @@ export default function SetupFlow({ onAccountCreated, onHasAccount }: Props) {
     // ── PIN ────────────────────────────────────────────────────────
     const handlePinKey = useCallback(async (k: string) => {
         console.log(step);
-        
-        if(step === 'email') return;
+
+        if (step === 'email') return;
         setError('');
         const isConfirm = step === 'confirm';
         const current = isConfirm ? confirmPin : pin;
@@ -85,7 +85,12 @@ export default function SetupFlow({ onAccountCreated, onHasAccount }: Props) {
                 localStorage.removeItem(LS_EMAIL);
                 // Plus de retour possible — passer à ActivationPage
                 onAccountCreated();
-            } catch {
+            } catch (err) {
+                alert(
+                    err instanceof Error
+                        ? err.message
+                        : String(err)
+                );
                 setError('Erreur lors de la création du compte');
             } finally {
                 setLoading(false);
