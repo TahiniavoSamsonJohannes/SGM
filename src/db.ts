@@ -149,7 +149,7 @@ class MaritimeDB extends Dexie {
 
     constructor() {
         super('MaritimeDB');
-        this.version(9).stores({
+        this.version(10).stores({
             crewMembers: '++id, nom, prenom, fascicule, nationalite',
             ships: '++id, nom, immatriculation',
             crewLists: '++id, shipId, updatedAt',
@@ -167,7 +167,6 @@ export const db = new MaritimeDB();
 
 // ─── Device ID — stocké dans IndexedDB ───────────────────────────────────────
 export async function getOrCreateDeviceId(): Promise<string> {
-    alert('create deviceId')
     // Attendre que la DB soit prête
     const existing = await db.deviceConfig.toCollection().first();
     if (existing?.deviceId) return existing.deviceId;
@@ -190,13 +189,19 @@ export async function seedDynamicValues() {
         await db.dynamicValues.bulkAdd([
             { type: 'fonction', value: 'CAPITAINE', usageCount: 0 },
             { type: 'fonction', value: 'SECOND CAPITAINE', usageCount: 0 },
+            { type: 'fonction', value: 'ÉLÈVE OQP', usageCount: 0 },
             { type: 'fonction', value: 'CHEF MÉCANICIEN', usageCount: 0 },
             { type: 'fonction', value: 'SECOND MÉCANICIEN', usageCount: 0 },
+            { type: 'fonction', value: 'TROISIÈME MÉCANICIEN', usageCount: 0 },
             { type: 'fonction', value: 'MAITRE GRAISSEUR', usageCount: 0 },
             { type: 'fonction', value: 'GRAISSEUR', usageCount: 0 },
-            { type: 'fonction', value: 'MATELOT QUALIFIÉ', usageCount: 0 },
+            { type: 'fonction', value: 'CHEF DE QUART', usageCount: 0 },
+            { type: 'fonction', value: 'BOSCO', usageCount: 0 },
+            { type: 'fonction', value: 'SECOND BOSCO', usageCount: 0 },
+            { type: 'fonction', value: 'MATELOT QUALIFIÉ PONT', usageCount: 0 },
             { type: 'fonction', value: 'MATELOT', usageCount: 0 },
             { type: 'fonction', value: 'CUISINIER', usageCount: 0 },
+            { type: 'fonction', value: 'SECOND CUISINIER', usageCount: 0 },
             { type: 'nationalite', value: 'MALAGASY', usageCount: 0 },
         ]);
     }

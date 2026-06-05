@@ -45,7 +45,6 @@ export default function SetupFlow({ onAccountCreated, onHasAccount }: Props) {
 
     // ── PIN ────────────────────────────────────────────────────────
     const handlePinKey = useCallback(async (k: string) => {
-        console.log(step);
 
         if (step === 'email') return;
         setError('');

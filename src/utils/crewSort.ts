@@ -2,14 +2,19 @@
 export const FONCTION_ORDER: string[] = [
     'CAPITAINE',
     'SECOND CAPITAINE',
+    'ÉLÈVE OQP',
     'CHEF MÉCANICIEN',
     'SECOND MÉCANICIEN',
+    'TROISIÈME MÉCANICIEN',
     'MAITRE GRAISSEUR',
     'GRAISSEUR',
+    'CHEF DE QUART',
     'BOSCO',
-    'MATELOT QUALIFIÉ',
+    'SECOND BOSCO',
+    'MATELOT QUALIFIÉ PONT',
     'MATELOT',
     'CUISINIER',
+    'SECOND CUISINIER',
 ];
 
 /**
