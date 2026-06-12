@@ -139,7 +139,6 @@ export default function CrewPage() {
     const [form, setForm] = useState(emptyForm());
     const [formError, setFormError] = useState('');
     const [deleting, setDeleting] = useState<CrewMember | null>(null);
-    const [confirmModal, setConfirmModal] = useState<boolean>(false);
 
     const cancelTimeoutRef = useRef<number | null>(null);
 
@@ -225,16 +224,6 @@ export default function CrewPage() {
         setFormError('');
         setModal(null);
     };
-
-    const handleCancel = () => {
-        if (cancelTimeoutRef.current) {
-            clearTimeout(cancelTimeoutRef.current);
-        }
-        setConfirmModal(false);
-        cancelTimeoutRef.current = window.setTimeout(() => {
-            setDeleting(null);
-        }, 1000);
-    }
 
     const confirmDelete = async (member: CrewMember) => {
         if (!member.id) return;
@@ -359,7 +348,7 @@ export default function CrewPage() {
                                     className="text-slate-400 hover:text-ocean-400 transition p-1">
                                     <Edit3 size={15} />
                                 </button>
-                                <button onClick={() => { setDeleting(m); setConfirmModal(true) }}
+                                <button onClick={() => setDeleting(m)}
                                     className="text-slate-400 hover:text-rose-400 transition p-1">
                                     <Trash2 size={15} />
                                 </button>
@@ -478,13 +467,13 @@ export default function CrewPage() {
 
             {/* Confirmation suppression */}
             <ConfirmDialog
-                open={confirmModal}
+                open={!!deleting}
                 title="Supprimer le membre"
                 message={`Supprimer ${deleting?.nom} ${deleting?.prenom} ?`}
                 confirmLabel="Supprimer"
                 danger
                 onConfirm={() => deleting && confirmDelete(deleting)}
-                onCancel={handleCancel}
+                onCancel={() => setDeleting(null)}
             />
         </div>
     );
