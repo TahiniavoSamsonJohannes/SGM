@@ -1,7 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { Upload, ArrowLeft, CheckCircle } from 'lucide-react';
 import { db } from '../db';
 import logoUrl from '../assets/logo-ae.png';
+import { normalizeTable } from '../utils/func';
+import { TABLE_SCHEMAS } from '../types';
 
 interface Props {
     onImported: () => void;  // redirige vers LoginPin après succès
@@ -12,50 +14,69 @@ export default function ImportAccount({ onImported, onBack }: Props) {
     const [importing, setImporting] = useState(false);
     const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
     const [success, setSuccess] = useState(false);
-    const fileRef = useRef<HTMLInputElement>(null);
 
     const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        setImporting(true);
         const file = e.target.files?.[0];
         if (!file) return;
 
-        setImporting(true);
-        setMsg(null);
-
         try {
             const backup = JSON.parse(await file.text());
+            if (!backup.tables) throw new Error('Format de fichier invalide');
+
+            const { tables } = backup;
 
             if (!backup.tables || backup.exportType !== 'full_backup')
                 throw new Error("Ce fichier n'est pas une sauvegarde complète (full_backup)");
 
-            const { tables } = backup;
+            const normalizedTables: Record<string, unknown[]> = {};
+            const tableNames = Object.keys(TABLE_SCHEMAS);
+            for (const tableName of tableNames) {
+                const raw = (tables[tableName] ?? []) as Record<string, unknown>[];
+                normalizedTables[tableName] = normalizeTable(raw, tableName);
+            }
 
             await db.crewMembers.clear();
             await db.ships.clear();
             await db.crewLists.clear();
             await db.exportedFiles.clear();
             await db.dynamicValues.clear();
+            await db.contracts.clear();
+            await db.cargoItems.clear();
+
+            if (normalizedTables.crewMembers?.length)
+                await db.crewMembers.bulkPut(normalizedTables.crewMembers as any);
+            if (normalizedTables.ships?.length)
+                await db.ships.bulkPut(normalizedTables.ships as any);
+            if (normalizedTables.crewLists?.length)
+                await db.crewLists.bulkPut(normalizedTables.crewLists as any);
+            if (normalizedTables.exportedFiles?.length)
+                await db.exportedFiles.bulkPut(normalizedTables.exportedFiles as any);
+            if (normalizedTables.dynamicValues?.length)
+                await db.dynamicValues.bulkPut(normalizedTables.dynamicValues as any);
+            if (normalizedTables.contracts?.length)
+                await db.contracts.bulkPut(normalizedTables.contracts as any);
+            if (normalizedTables.cargoItems?.length)
+                await db.cargoItems.bulkPut(normalizedTables.cargoItems as any);
+
             await db.authConfig.clear();
             await db.deviceConfig.clear();
+            if (normalizedTables.authConfig?.length)
+                await db.authConfig.bulkPut(normalizedTables.authConfig as any);
+            if (normalizedTables.deviceConfig?.length)
+                await db.deviceConfig.bulkPut(normalizedTables.deviceConfig as any);
 
-            if (tables.crewMembers?.length) await db.crewMembers.bulkPut(tables.crewMembers);
-            if (tables.ships?.length) await db.ships.bulkPut(tables.ships);
-            if (tables.crewLists?.length) await db.crewLists.bulkPut(tables.crewLists);
-            if (tables.exportedFiles?.length) await db.exportedFiles.bulkPut(tables.exportedFiles);
-            if (tables.dynamicValues?.length) await db.dynamicValues.bulkPut(tables.dynamicValues);
-            if (tables.authConfig?.length) await db.authConfig.bulkPut(tables.authConfig);
-            if (tables.deviceConfig?.length) await db.deviceConfig.bulkPut(tables.deviceConfig);
 
             setMsg({ text: 'Compte restauré avec succès !', ok: true });
             setSuccess(true);
 
             // Redirection automatique vers LoginPin après 1.5s
             setTimeout(() => onImported(), 1500);
-
         } catch (err: any) {
             setMsg({ text: err.message || 'Fichier invalide', ok: false });
         } finally {
             setImporting(false);
-            if (fileRef.current) fileRef.current.value = '';
+            e.target.value = '';
         }
     };
 
@@ -86,7 +107,6 @@ export default function ImportAccount({ onImported, onBack }: Props) {
                         </p>
 
                         <input
-                            ref={fileRef}
                             type="file"
                             accept=".json"
                             onChange={handleImport}

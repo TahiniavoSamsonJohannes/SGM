@@ -398,14 +398,14 @@ export default function CargoPage({ voyage, onBack }: Props) {
                                         value={form.expediteurAdresse}
                                         onChange={e => setForm(f => ({ ...f, expediteurAdresse: e.target.value }))}
                                         placeholder="Adresse" />
-                                    <Input label="N° commande"
+                                    <Input label="N° conteneur"
                                         value={form.numCommande}
                                         onChange={e => setForm(f => ({ ...f, numCommande: e.target.value }))}
-                                        placeholder="N° commande" />
-                                    <Input label="N° conteneur"
+                                        placeholder="N° conteneur" />
+                                    <Input label="N° plomb"
                                         value={form.numConteneur}
                                         onChange={e => setForm(f => ({ ...f, numConteneur: e.target.value }))}
-                                        placeholder="N° conteneur" />
+                                        placeholder="N° plomb" />
                                 </div>
 
                                 {/* Destinataire */}
