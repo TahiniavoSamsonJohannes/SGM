@@ -32,7 +32,6 @@ export default function ImportAccount({ onImported, onBack }: Props) {
             await db.crewMembers.clear();
             await db.ships.clear();
             await db.crewLists.clear();
-            await db.checklistDocs.clear();
             await db.exportedFiles.clear();
             await db.dynamicValues.clear();
             await db.authConfig.clear();
@@ -41,7 +40,6 @@ export default function ImportAccount({ onImported, onBack }: Props) {
             if (tables.crewMembers?.length) await db.crewMembers.bulkPut(tables.crewMembers);
             if (tables.ships?.length) await db.ships.bulkPut(tables.ships);
             if (tables.crewLists?.length) await db.crewLists.bulkPut(tables.crewLists);
-            if (tables.checklistDocs?.length) await db.checklistDocs.bulkPut(tables.checklistDocs);
             if (tables.exportedFiles?.length) await db.exportedFiles.bulkPut(tables.exportedFiles);
             if (tables.dynamicValues?.length) await db.dynamicValues.bulkPut(tables.dynamicValues);
             if (tables.authConfig?.length) await db.authConfig.bulkPut(tables.authConfig);
