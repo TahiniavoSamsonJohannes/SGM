@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-    Plus, Search, FileText, Edit3, Trash2,
-    Download, User, ArrowLeft,
+    Plus, FileText, Edit3, Trash2,
+    User, ArrowLeft,
     Eye,
+    Save,
 } from 'lucide-react';
 import {
     db, type Contract, type CrewMember,
     computeContractTotals, isContractActive,
     addOrIncrementDynamic,
     type FONCTION_TYPE,
+    validateContractDuration,
 } from '../db';
 import { generateContractPDF, previewContractPDF, type ContractPDFData } from '../pdfGenerator';
 import Modal from '../components/Modal';
@@ -21,6 +23,9 @@ import { fmtDate } from '../utils/fmt';
 import PdfPreviewModal from '../components/PdfPreviewModal';
 import { useDeleteAnimation } from '../hooks/useDeleteAnimation';
 import { FONCTION_ORDER } from '../utils/crewSort';
+import type { FilterGroup } from '../components/FilterPanel';
+import FilterPanel from '../components/FilterPanel';
+import SearchBar from '../components/SearchBar';
 
 // ── Formatage ──────────────────────────────────────────────────────────────────
 function fmtNumber(n: number) {
@@ -63,7 +68,22 @@ export default function ContractsPage() {
     const [editing, setEditing] = useState<Contract | null>(null);
     const [viewing, setViewing] = useState<Contract | null>(null);
     const [deleting, setDeleting] = useState<Contract | null>(null);
-    const { triggerDelete, isDeleting } = useDeleteAnimation(300);
+    const { triggerDelete, isDeleting } = useDeleteAnimation(1300);
+
+    // Filtres contrats
+    const filterGroups: FilterGroup[] = [
+        {
+            key: 'statut', label: 'Statut', type: 'single',
+            options: [
+                { value: 'actif', label: 'Actif' },
+                { value: 'expire', label: 'Expiré' },
+            ],
+        },
+    ];
+
+    const [filters, setFilters] = useState<Record<string, string | string[]>>({
+        statut: '',
+    });
 
     // Formulaire contrat
     const [form, setForm] = useState(emptyContractForm());
@@ -80,7 +100,6 @@ export default function ContractsPage() {
     const [previewTitle, setPreviewTitle] = useState('');
     const [previewOpen, setPreviewOpen] = useState(false);
     const [previewDownload, setPreviewDownload] = useState<(() => void) | undefined>();
-    const [loadingPreview, setLoadingPreview] = useState(false);
 
     // ── Helper : construire les données PDF d'un contrat ─────────────
     const buildPDFData = (c: Contract): ContractPDFData | null => {
@@ -116,7 +135,6 @@ export default function ContractsPage() {
     const handlePreview = async (c: Contract) => {
         const data = buildPDFData(c);
         if (!data) return;
-        setLoadingPreview(true);
         const url = await previewContractPDF(data);
         const member = allMembers.find(m => m.id === c.crewMemberId);
         setPreviewUrl(url);
@@ -125,14 +143,6 @@ export default function ContractsPage() {
         );
         setPreviewDownload(() => () => generateContractPDF(data));
         setPreviewOpen(true);
-        setLoadingPreview(false);
-    };
-
-    // ── Téléchargement (existant, utiliser buildPDFData) ─────────────
-    const exportPDF = async (c: Contract) => {
-        const data = buildPDFData(c);
-        if (!data) return;
-        await generateContractPDF(data);
     };
 
     const closePreview = () => {
@@ -229,6 +239,9 @@ export default function ContractsPage() {
         if (!form.dateDebut) errors.dateDebut = 'Date de début requise';
         if (!form.dateFin) errors.dateFin = 'Date de fin requise';
 
+        const { valid, message } = validateContractDuration(form.dateDebut, form.dateFin);
+        if (!valid) { setFormErrors(e => ({ ...e, dateFin: message })); return; }
+
         if (Object.keys(errors).length > 0) { setFormErrors(errors); return; }
 
         const now = new Date();
@@ -288,40 +301,31 @@ export default function ContractsPage() {
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
 
+    const handleFilterChange = (key: string, value: string | string[]) =>
+        setFilters(f => ({ ...f, [key]: value }));
+
+    const resetFilters = () => setFilters({ statut: '' });
+
     const filtered = sorted.filter(c => {
         const member = allMembers.find(m => m.id === c.crewMemberId);
         const name = member ? `${member.nom} ${member.prenom}`.toLowerCase() : '';
-        return (
+        const matchSearch = (
             name.includes(search.toLowerCase()) ||
             c.shipName.toLowerCase().includes(search.toLowerCase()) ||
             c.fonction.toLowerCase().includes(search.toLowerCase())
         );
+        const statut = filters.statut as string;
+        const active = isContractActive(c);
+        const matchStatut = !statut || (
+            statut === 'actif' ? active :
+                statut === 'expire' ? !active : true
+        );
+        return matchSearch && matchStatut;
     });
 
     const viewingMember = viewing
         ? allMembers.find(m => m.id === viewing.crewMemberId)
         : null;
-
-    // Ajouter cette fonction utilitaire dans le fichier :
-    function computeDuration(dateDebut: string, dateFin: string): string {
-        if (!dateDebut || !dateFin) return '—';
-        const start = new Date(dateDebut + 'T00:00:00');
-        const end = new Date(dateFin + 'T00:00:00');
-        if (isNaN(start.getTime()) || isNaN(end.getTime())) return '—';
-        if (end < start) return 'Dates invalides';
-
-        const totalDays = Math.floor(
-            (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-        );
-
-        const months = Math.floor(totalDays / 30);
-        const days = totalDays % 30;
-
-        const parts: string[] = [];
-        if (months > 0) parts.push(`${months} mois`);
-        if (days > 0) parts.push(`${days} jour${days > 1 ? 's' : ''}`);
-        return parts.length > 0 ? parts.join(' ') : '0 jour';
-    }
 
     return (
         <div className="h-full flex flex-col gap-4 overflow-hidden fade-in">
@@ -339,13 +343,22 @@ export default function ContractsPage() {
             </div>
 
             {/* ── Recherche ── */}
-            <div className="relative flex-shrink-0">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input value={search} onChange={e => setSearch(e.target.value)}
-                    placeholder="Rechercher par membre, navire, fonction..."
-                    className="w-full bg-navy-800 border border-navy-600 rounded-lg pl-9 pr-3
-            py-2 text-sm text-slate-200 placeholder-slate-500
-            focus:outline-none focus:border-ocean-500 transition" />
+            <SearchBar
+                value={search}
+                onChange={setSearch}
+                placeholder="Rechercher par nom, fascicule..."
+            />
+            <div className="flex items-center justify-between flex-shrink-0">
+                <span className="text-xs text-slate-500">
+                    {filtered.length} contrat{filtered.length > 1 ? 's' : ''}
+                    {search || filters.statut ? ` sur ${contracts.length}` : ''}
+                </span>
+                <FilterPanel
+                    groups={filterGroups}
+                    values={filters}
+                    onChange={handleFilterChange}
+                    onReset={resetFilters}
+                />
             </div>
 
             {/* ── Liste ── */}
@@ -363,7 +376,7 @@ export default function ContractsPage() {
                         <div key={c.id} onClick={() => { setViewing(c); setModal('detail'); }}
                             className={`bg-navy-800 border border-navy-600 rounded-xl p-4
                             hover:border-navy-500 transition cursor-pointer
-                            ${isDeleting(c.id!) ? 'item-deleting' : ''}`}
+                            ${isDeleting(c.id!) ? 'item-deleting' : ' item-enter'}`}
                         >
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0 flex-1">
@@ -404,32 +417,14 @@ export default function ContractsPage() {
                                     </div>
 
                                     {/* Période + durée calculée */}
-                                    <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-x-3">
-                                        <span>Du {fmtDate(new Date(c.dateDebut))} au {fmtDate(new Date(c.dateFin))}</span>
-                                        <span className="text-slate-600 font-medium">
-                                            Durée : {computeDuration(c.dateDebut, c.dateFin)}
-                                        </span>
-                                    </div>
-
-                                    <div className="text-xs text-slate-600 mt-0.5 font-mono">
-                                        Total : {fmtNumber(computeContractTotals(c).totalGeneral)} Ar/mois
+                                    <div className="text-xs flex-col sm:flex-row text-slate-500 mt-0.5 flex flex-wrap gap-1 gap-x-3">
+                                        <span>Début : {fmtDate(new Date(c.dateDebut))}</span>
+                                        <span>Fin : {fmtDate(new Date(c.dateFin))}</span>
                                     </div>
                                 </div>
                                 {/* Boutons actions */}
-                                <div className="flex gap-1 flex-shrink-0"
+                                <div className="flex flex-col sm:flex-row gap-1 flex-shrink-0"
                                     onClick={e => e.stopPropagation()}>
-                                    <button onClick={() => handlePreview(c)}
-                                        disabled={loadingPreview}
-                                        title="Aperçu PDF"
-                                        className="text-slate-400 hover:text-ocean-400 transition p-1.5
-      disabled:opacity-50">
-                                        <Eye size={15} />
-                                    </button>
-                                    <button onClick={() => exportPDF(c)}
-                                        title="Télécharger PDF"
-                                        className="text-slate-400 hover:text-ocean-400 transition p-1.5">
-                                        <Download size={15} />
-                                    </button>
                                     <button onClick={() => openEdit(c)}
                                         className="text-slate-400 hover:text-amber-400 transition p-1.5">
                                         <Edit3 size={15} />
@@ -668,7 +663,7 @@ export default function ContractsPage() {
                                 Fonction *
                             </label>
                             <AutoComplete value={form.fonction}
-                                onChange={v => setForm(f => ({ ...f, fonction: v as FONCTION_TYPE}))}
+                                onChange={v => setForm(f => ({ ...f, fonction: v as FONCTION_TYPE }))}
                                 suggestions={fonctionSuggestions} placeholder="Fonction..." />
                             {formErrors.fonction && (
                                 <p className="text-rose-400 text-xs mt-1">{formErrors.fonction}</p>
@@ -875,9 +870,9 @@ export default function ContractsPage() {
                             Annuler
                         </button>
                         <button onClick={save}
-                            className="bg-ocean-600 hover:bg-ocean-500 text-white px-5 py-2
+                            className="flex items-center gap-2 bg-ocean-600 hover:bg-ocean-500 text-white px-5 py-2
                 rounded-lg text-sm font-medium transition">
-                            Enregistrer
+                            <Save size={15} /> Enregistrer
                         </button>
                     </div>
                 </div>
@@ -964,12 +959,7 @@ export default function ContractsPage() {
                             <button onClick={() => handlePreview(viewing)}
                                 className="flex items-center gap-2 bg-navy-700 hover:bg-navy-600
       text-white px-4 py-2 rounded-lg text-sm border border-navy-500 transition">
-                                <Eye size={14} /> Aperçu
-                            </button>
-                            <button onClick={() => exportPDF(viewing)}
-                                className="flex items-center gap-2 bg-ocean-600 hover:bg-ocean-500
-      text-white px-4 py-2 rounded-lg text-sm transition">
-                                <Download size={14} /> PDF
+                                <Eye size={14} /> Contrat PDF
                             </button>
                         </div>
                     </div>

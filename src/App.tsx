@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  LayoutDashboard, Users, FileText, Ship,
+  LayoutDashboard, Users, Ship,
   History, UserCircle, LogOut, Menu, FileSignature,
+  Anchor,
 } from 'lucide-react';
 import {
   seedDynamicValues, isFirstLaunch,
@@ -16,11 +17,9 @@ import ImportAccount from './auth/ImportAccount';
 import Dashboard from './pages/Dashboard';
 import CrewPage from './pages/CrewPage';
 import ShipsPage from './pages/ShipsPage';
-import CrewListsPage from './pages/CrewListsPage';
 import CrewListPage from './pages/CrewListPage';
 import HistoryPage from './pages/HistoryPage';
 import AccountPage from './pages/AccountPage';
-import DataPage from './pages/DataPage';
 import ContractsPage from './pages/ContractsPage';
 
 import logoUrl from './assets/logo-ae.png';
@@ -28,12 +27,15 @@ import ConfirmDialog from './components/ConfirmDialog';
 import ActivationPage from './pages/ActivationPage';
 import LoadingScreen from './components/LoadingScreen';
 import { modalRegistry } from './hooks/useModalRegistry';
+import VoyagesPage from './pages/VoyagesPage';
+import CargoPage from './pages/CargoPage';
+import ScrollToTopButton from './components/ScrollToTopButton';
 
 const TABS = [
   { id: 'dashboard' as TabId, label: 'Tableau de bord', icon: LayoutDashboard },
   { id: 'crew' as TabId, label: 'Équipage', icon: Users },
   { id: 'ships' as TabId, label: 'Navires', icon: Ship },
-  { id: 'crewlists' as TabId, label: "Listes d'équipage", icon: FileText },
+  { id: 'voyages' as TabId, label: 'Voyages', icon: Anchor },
   { id: 'contracts' as TabId, label: 'Contrats', icon: FileSignature },
   { id: 'history' as TabId, label: 'Historique exports', icon: History },
   { id: 'account' as TabId, label: 'Mon compte', icon: UserCircle },
@@ -60,6 +62,9 @@ export default function App() {
   const [showForm, setShowForm] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [cargoVoyage, setCargoVoyage] = useState<CrewList | null>(null);
+
+  const listRef = useRef<HTMLDivElement>(null);
 
   const LS_TAB = "ae_active_tab";
 
@@ -68,9 +73,24 @@ export default function App() {
   const tabRef = useRef(tab);
   const authStateRef = useRef(authState);
 
+  // Ajouter un état pour la phase de l'overlay
+  const [overlayPhase, setOverlayPhase] =
+    useState<'closed' | 'open' | 'closing'>('closed');
+
+  // Synchroniser overlayPhase avec sidebarOpen
+  useEffect(() => {
+    if (sidebarOpen) {
+      setOverlayPhase('open');
+    } else if (overlayPhase === 'open') {
+      setOverlayPhase('closing');
+      const t = setTimeout(() => setOverlayPhase('closed'), 220);
+      return () => clearTimeout(t);
+    }
+  }, [sidebarOpen]);
+
 
   const navigate = (id: TabId) => {
-    if (id !== 'crewlists') { setEditingList(null); setShowForm(false); }
+    if (id !== 'voyages') { setEditingList(null); setShowForm(false); }
     setTab(id);
     localStorage.setItem(LS_TAB, id);
     setSidebarOpen(false);
@@ -127,12 +147,10 @@ export default function App() {
 
   useEffect(() => {
     async function init() {
-      console.log('init start');
-      
+
       await seedDynamicValues();
       const first = await isFirstLaunch();
       if (first) {
-        console.log('first init');
         setAuthState('setup');
         return;
       }
@@ -159,8 +177,6 @@ export default function App() {
     }
     init();
   }, []);
-
-
 
   // ── Après connexion PIN réussie ──
   const handleLoginSuccess = async () => {
@@ -198,7 +214,7 @@ export default function App() {
   const handleEditList = (list: CrewList) => {
     setEditingList(list);
     setShowForm(true);
-    setTab('crewlists');
+    setTab('voyages');
     setSidebarOpen(false);
   };
 
@@ -257,9 +273,14 @@ export default function App() {
   return (
     <div className="h-screen w-screen flex bg-navy-900 overflow-hidden">
 
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-30 bg-black/60 lg:hidden"
-          onClick={() => setSidebarOpen(false)} />
+      {overlayPhase !== 'closed' && (
+        <div
+          className={`fixed inset-0 z-30 bg-black/60 lg:hidden transition-opacity duration-220
+          ${overlayPhase === 'open' ? 'opacity-100' : ''}
+          ${overlayPhase === 'closing' ? 'opacity-0' : ''}
+          ${overlayPhase === 'open' ? 'animate-fade-in' : 'animate-fade-out'}`}
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
       {/* Sidebar */}
@@ -321,30 +342,38 @@ export default function App() {
           </span>
         </header>
 
-        <main className="flex-1 overflow-y-auto custom-scroll pb-safe">
+        <main ref={listRef} className="flex-1 overflow-y-auto custom-scroll pb-safe">
           <div className="p-4 sm:p-6 max-w-4xl mx-auto">
             {tab === 'dashboard' && <Dashboard setTab={navigate} />}
             {tab === 'crew' && <CrewPage />}
             {tab === 'ships' && <ShipsPage />}
-            {tab === 'crewlists' && !showForm && (
-              <CrewListsPage
+            {tab === 'voyages' && !showForm && !cargoVoyage && (
+              <VoyagesPage
                 onCreateNew={() => { setEditingList(null); setShowForm(true); }}
                 onEditList={handleEditList}
+                onViewCargo={v => setCargoVoyage(v)}
               />
             )}
-            {tab === 'crewlists' && showForm && (
+            {tab === 'voyages' && showForm && (
               <CrewListPage
                 editingList={editingList}
                 onSaved={() => setShowForm(false)}
                 onBack={() => setShowForm(false)}
               />
             )}
+            {tab === 'voyages' && cargoVoyage && (
+              <CargoPage
+                voyage={cargoVoyage}
+                onBack={() => setCargoVoyage(null)}
+              />
+            )}
             {tab === 'contracts' && <ContractsPage />}
             {tab === 'history' && <HistoryPage />}
             {tab === 'account' && <AccountPage />}
-            {tab === 'data' && <DataPage />}
           </div>
         </main>
+
+        {tab !== 'account' && <ScrollToTopButton scrollContainerRef={listRef} />}
       </div>
 
       <ConfirmDialog

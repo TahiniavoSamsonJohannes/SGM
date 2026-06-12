@@ -1,9 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Users, FileText, CheckSquare } from 'lucide-react';
+import { Users, FileText, Anchor, Ship, FileSignature } from 'lucide-react';
 import { db } from '../db';
 import logoUrl from '../assets/logo-ae.png';
 import type { TabId } from '../types';
-import { fmtDateTime } from '../utils/fmt';
+import { useEffect } from 'react';
 
 export default function Dashboard({ setTab }: { setTab: (t: TabId) => void }) {
     const crewCount = useLiveQuery(() => db.crewMembers.count()) ?? 0;
@@ -16,14 +16,30 @@ export default function Dashboard({ setTab }: { setTab: (t: TabId) => void }) {
             c.dateFin && new Date(c.dateFin) >= now
         ).length;
     }) ?? 0;
+
+    // Nombre de cargaisons par voyage
+    const cargoCountMap = useLiveQuery(async () => {
+        const all = await db.cargoItems.toArray();
+        const map: Record<number, number> = {};
+        all.forEach(c => {
+            map[c.crewListId] = (map[c.crewListId] ?? 0) + 1;
+        });
+        return map;
+    }, []) ?? {};
     const recent = useLiveQuery(() => db.crewLists.orderBy('updatedAt').reverse().limit(3).toArray()) ?? [];
-    
+
     const stats = [
         { icon: Users, label: "Membres d'équipage", value: crewCount, tab: 'crew', color: 'text-ocean-400' },
-        { icon: FileText, label: 'Navires', value: shipCount, tab: 'ships', color: 'text-emerald-400' },
-        { icon: FileText, label: "Listes d'équipage", value: listCount, tab: 'crewlists', color: 'text-amber-400' },
-        { icon: CheckSquare, label: 'Contrats actifs', value: activeContractsCount, tab: 'contracts', color: 'text-rose-400' },
+        { icon: Ship, label: 'Navires', value: shipCount, tab: 'ships', color: 'text-rose-400' },
+        { icon: Anchor, label: "Voyages", value: listCount, tab: 'voyages', color: 'text-amber-400' },
+        { icon: FileSignature, label: 'Contrats actifs', value: activeContractsCount, tab: 'contracts', color: 'text-emerald-400' },
     ];
+
+    useEffect(() => {
+        // Scroller le main vers le haut
+        const main = document.querySelector('main');
+        if (main) main.scrollTop = 0;
+    }, []);
 
     return (
         <div className="space-y-8 fade-in">
@@ -57,10 +73,10 @@ export default function Dashboard({ setTab }: { setTab: (t: TabId) => void }) {
                 <div className="bg-navy-800 border border-dashed border-navy-600
     rounded-xl p-8 text-center text-slate-500">
                     <FileText size={28} className="mx-auto mb-3 opacity-40" />
-                    <p className="text-sm">Aucune liste créée</p>
-                    <button onClick={() => setTab('crewlists')}
+                    <p className="text-sm">Aucun voyage créé</p>
+                    <button onClick={() => setTab('voyages')}
                         className="mt-3 text-ocean-400 text-sm hover:underline">
-                        Créer une première liste →
+                        Créer le premier voyage →
                     </button>
                 </div>
             ) : (
@@ -69,7 +85,7 @@ export default function Dashboard({ setTab }: { setTab: (t: TabId) => void }) {
                         <div key={l.id}
                             className="bg-navy-800 border border-navy-600 rounded-xl p-4
           hover:border-navy-500 transition cursor-pointer"
-                            onClick={() => setTab('crewlists')}
+                            onClick={() => setTab('voyages')}
                         >
                             {/* Nom navire */}
                             <div className="font-medium text-slate-200 text-sm truncate">
@@ -82,15 +98,21 @@ export default function Dashboard({ setTab }: { setTab: (t: TabId) => void }) {
                                 </div>
                             )}
                             {/* Départ → Destination */}
-                            <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-2">
-                                {l.lieuDepart && <span>Départ : {l.lieuDepart}</span>}
-                                {l.destination && <span>Destination : {l.destination}</span>}
-                                <span>{l.members.length} membres</span>
+                            <div className="flex text-xs gap-1 flex-col sm:flex-row text-slate-500 mt-1">
+                                <span className=''>Départ : {l.lieuDepart ? l.lieuDepart + ',' : '—'}</span>
+                                <span className=''>Destination : {l.destination ? l.destination : '—'}</span>
                             </div>
-                            {/* Dates */}
-                            <div className="text-xs text-slate-600 mt-1.5 space-y-0.5">
-                                <div>Créée le : {fmtDateTime(l.createdAt)}</div>
-                                <div>Modifiée le : {fmtDateTime(l.updatedAt)}</div>
+
+                            {/* Compteurs */}
+                            <div className="flex items-center gap-3 mt-1.5">
+                                <span className="text-xs text-slate-600">
+                                    {l.members.length} membre{l.members.length > 1 ? 's' : ''}
+                                </span>
+                                {(cargoCountMap[l.id!] ?? 0) > 0 && (
+                                    <span className="text-xs text-amber-400/80">
+                                        {cargoCountMap[l.id!]} cargaison{cargoCountMap[l.id!] > 1 ? 's' : ''}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     ))}

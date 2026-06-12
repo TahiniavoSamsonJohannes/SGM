@@ -1,5 +1,5 @@
 import { AlertTriangle } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { modalRegistry } from '../hooks/useModalRegistry';
 
@@ -21,11 +21,26 @@ export default function ConfirmDialog({
     danger = false,
     onConfirm, onCancel,
 }: Props) {
+    // État interne : 'closed' | 'opening' | 'open' | 'closing'
+    const [phase, setPhase] = useState<'closed' | 'open' | 'closing'>('closed');
     const onCancelRef = useRef(onCancel);
     useEffect(() => { onCancelRef.current = onCancel; }, [onCancel]);
 
+    // Transition à l'ouverture
     useEffect(() => {
-        if (!open) return;
+        if (open) {
+            setPhase('open');
+        } else if (phase === 'open') {
+            // Déclencher l'animation de fermeture
+            setPhase('closing');
+            const t = setTimeout(() => setPhase('closed'), 220);
+            return () => clearTimeout(t);
+        }
+    }, [open]);
+
+    // Registre modal
+    useEffect(() => {
+        if (phase === 'closing') return;
         document.body.style.overflow = 'hidden';
         const handler = () => onCancelRef.current();
         modalRegistry.register(handler);
@@ -33,19 +48,27 @@ export default function ConfirmDialog({
             document.body.style.overflow = '';
             modalRegistry.unregister(handler);
         };
-    }, [open]);
+    }, [phase]);
 
-    if (!open) return null;
+    if (phase === 'closed') return null;
+
+
+    const overlayClass = phase === 'closing'
+        ? 'animate-fade-out'
+        : 'animate-fade-in';
+
+    const panelClass = phase === 'closing'
+        ? 'animate-slide-up'
+        : 'animate-slide-down';
 
     return createPortal(
         <div
-            className="fixed inset-0 z-[60] bg-black/65 overflow-y-auto"
-            onClick={onCancel}
+            className={`fixed inset-0 z-[60] bg-black/65 overflow-y-auto ${overlayClass}`}
         >
             <div className="flex min-h-full items-start justify-center p-4 py-8">
                 <div
-                    className="relative bg-navy-800 border border-navy-600 rounded-2xl
-            shadow-2xl w-full max-w-sm slide-down"
+                    className={`relative bg-navy-800 border border-navy-600 rounded-2xl
+            shadow-2xl w-full max-w-sm ${panelClass}`}
                     onClick={e => e.stopPropagation()}
                 >
                     <div className="p-5">

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Plus, Edit3, Trash2, Save, Anchor, Search } from 'lucide-react';
+import { Plus, Edit3, Trash2, Save, Anchor, AlertTriangle } from 'lucide-react';
 import { db, type Ship } from '../db';
 import Input from '../components/Input';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import logoUrl from '../assets/logo-ae.png';
 import { useDeleteAnimation } from '../hooks/useDeleteAnimation';
+import SearchBar from '../components/SearchBar';
 
 export default function ShipsPage() {
     const ships = useLiveQuery(() => db.ships.orderBy('nom').toArray()) ?? [];
@@ -17,7 +18,11 @@ export default function ShipsPage() {
     const [form, setForm] = useState({ nom: '', immatriculation: '' });
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [deleting, setDeleting] = useState<Ship | null>(null);
-    const { triggerDelete, isDeleting } = useDeleteAnimation(300);
+    const { triggerDelete, isDeleting } = useDeleteAnimation(1300);
+
+    // État pour l'erreur de suppression
+    const [deleteError, setDeleteError] = useState<string>('');
+    const [deleteErrorModal, setDeleteErrorModal] = useState(false);
 
     const openAdd = () => {
         setActive(null);
@@ -83,9 +88,29 @@ export default function ShipsPage() {
     };
 
     const confirmDelete = async (ship: Ship) => {
-        if (!ship.id) return;
-        setDeleting(null); // fermer le ConfirmDialog immédiatement
-        await triggerDelete(ship.id, () => db.ships.delete(ship.id!));
+        if (!ship?.id) return;
+
+        // Vérifier si ce navire est lié à des voyages
+        const linkedLists = await db.crewLists
+            .where('shipId')
+            .equals(ship.id)
+            .count();
+
+        if (linkedLists > 0) {
+            setDeleting(null);
+            setDeleteError(
+                `Impossible de supprimer "${ship.nom}" : ` +
+                `ce navire est lié à ${linkedLists} voyage${linkedLists > 1 ? 's' : ''}. ` +
+                `Supprimez d'abord les voyages associés.`
+            );
+            setDeleteErrorModal(true);
+            return;
+        }
+
+        // Aucun voyage lié → supprimer
+        const id = ship.id;
+        setDeleting(null);
+        await triggerDelete(id, () => db.ships.delete(id));
     };
 
     const filtered = ships.filter(s =>
@@ -111,18 +136,18 @@ export default function ShipsPage() {
                 </button>
             </div>
 
-            {/* ── Recherche fixe ── */}
-            <div className="relative flex-shrink-0">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder="Rechercher un navire..."
-                    className="w-full bg-navy-800 border border-navy-600 rounded-lg pl-9 pr-3
-            py-2 text-sm text-slate-200 placeholder-slate-500
-            focus:outline-none focus:border-ocean-500 transition"
-                />
-            </div>
+            {/* ── Recherche ── */}
+            <SearchBar
+                value={search}
+                onChange={setSearch}
+                placeholder="Rechercher par nom, fascicule..."
+            />
+
+            {/* Total */}
+            <p className="text-xs text-slate-500 flex-shrink-0">
+                {filtered.length} navire{filtered.length > 1 ? 's' : ''}
+                {search ? ` sur ${ships.length}` : ''}
+            </p>
 
             {/* ── Liste scrollable ── */}
             <div className="flex-1 min-h-0 overflow-y-auto custom-scroll space-y-2 pb-4">
@@ -141,7 +166,7 @@ export default function ShipsPage() {
                         className={`bg-navy-800 border border-navy-600 rounded-xl p-4
                         flex items-center justify-between hover:border-navy-500
                         transition cursor-pointer
-                        ${isDeleting(s.id!) ? 'item-deleting' : ''}`}
+                        ${isDeleting(s.id!) ? 'item-deleting' : ' item-enter'}`}
                     >
                         <div className="flex items-center gap-3 min-w-0">
                             <img
@@ -290,6 +315,32 @@ export default function ShipsPage() {
                 onConfirm={() => deleting && confirmDelete(deleting)}
                 onCancel={() => setDeleting(null)}
             />
+
+            {/* MODAL ERROR */}
+            <Modal
+                open={deleteErrorModal}
+                onClose={() => setDeleteErrorModal(false)}
+                title="Suppression impossible"
+                maxWidth="max-w-sm"
+            >
+                <div className="space-y-4">
+                    <div className="flex items-start gap-3 p-3 bg-amber-500/10
+      border border-amber-500/20 rounded-lg">
+                        <AlertTriangle size={16}
+                            className="text-amber-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-slate-300">{deleteError}</p>
+                    </div>
+                    <div className="flex justify-end">
+                        <button
+                            onClick={() => setDeleteErrorModal(false)}
+                            className="bg-navy-700 hover:bg-navy-600 text-white px-4 py-2
+          rounded-lg text-sm border border-navy-500 transition"
+                        >
+                            Compris
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 }

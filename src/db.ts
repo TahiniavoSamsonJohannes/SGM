@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { fmtDate } from './utils/fmt';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -80,15 +81,52 @@ export interface ChecklistDoc {
     createdAt: Date;
 }
 
-export interface ExportedFile {
+// Type discriminant pour les exports
+export type ExportType =
+    | 'liste'
+    | 'checklist'
+    | 'contrat'
+    | 'manifeste';
+
+export interface ExportedFileBase {
     id?: number;
-    type: 'liste' | 'checklist';
+    type: ExportType;
     filename: string;
+    exportedAt: Date;
+}
+
+export interface ExportedFileListe extends ExportedFileBase {
+    type: 'liste';
     shipName: string;
     destination: string;
     membersCount: number;
-    exportedAt: Date;
 }
+
+export interface ExportedFileChecklist extends ExportedFileBase {
+    type: 'checklist';
+    shipName: string;
+    membersCount: number;
+}
+
+export interface ExportedFileContrat extends ExportedFileBase {
+    type: 'contrat';
+    memberNom: string;
+    fonction: string;
+}
+
+export interface ExportedFileManifeste extends ExportedFileBase {
+    type: 'manifeste';
+    shipName: string;
+    destination: string;
+    cargoCount: number;
+}
+
+export type ExportedFile =
+    | ExportedFileListe
+    | ExportedFileChecklist
+    | ExportedFileContrat
+    | ExportedFileManifeste;
+
 
 export interface DynamicValue {
     id?: number;
@@ -106,6 +144,33 @@ export interface AuthConfig {
     subscriptionType: 'test' | 'monthly' | 'yearly' | null;
     subscriptionStart: Date | null;
     subscriptionEnd: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface CargoMarchandise {
+    nbColis: number;
+    description: string;
+    poidsKg: number;
+}
+
+export interface CargoItem {
+    id?: number;
+    crewListId: number;
+    ordre: number;
+    // Chargeur
+    expediteurNom: string;
+    expediteurAdresse: string;
+    numCommande: string;
+    numConteneur: string;
+    // Destinataire
+    destinataireNom: string;
+    destinataireAdresse: string;
+    // Marchandises
+    marchandises: CargoMarchandise[];
+    // Déclaration
+    numDeclaration: string;
+    dateDeclaration: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -148,6 +213,7 @@ class MaritimeDB extends Dexie {
     authConfig!: Table<AuthConfig>;
     deviceConfig!: Table<DeviceConfig>;
     contracts!: Table<Contract>;
+    cargoItems!: Table<CargoItem>;
 
     constructor() {
         super('MaritimeDB');
@@ -161,6 +227,7 @@ class MaritimeDB extends Dexie {
             authConfig: '++id',
             deviceConfig: '++id',
             contracts: '++id, crewMemberId, dateDebut, dateFin',
+            cargoItems: '++id, crewListId',
         });
     }
 }
@@ -186,7 +253,6 @@ export async function getOrCreateDeviceId(): Promise<string> {
 
 export async function seedDynamicValues() {
     const count = await db.dynamicValues.count();
-    console.log('DYNAMIC VALUES', count);
     if (count === 0) {
         // Fonctions seulement — pas de fascicules ni brevets
         await db.dynamicValues.bulkPut([
@@ -225,6 +291,51 @@ export async function addOrIncrementDynamic(
     } else {
         await db.dynamicValues.add({ type, value: value.trim(), usageCount: 1 });
     }
+}
+
+// ── Suppression en cascade membre + contrats ──────────────────────
+export async function deleteMemberWithContracts(memberId: number): Promise<void> {
+    await db.contracts.where('crewMemberId').equals(memberId).delete();
+    await db.crewMembers.delete(memberId);
+}
+
+// ── Membres ayant un contrat pour un navire donné ─────────────────
+export async function getMembersByShip(
+    shipName: string
+): Promise<CrewMember[]> {
+    if (!shipName.trim()) return [];
+    // Trouver les contrats liés à ce navire
+    const contracts = await db.contracts
+        .filter(c => c.shipName.toUpperCase() === shipName.toUpperCase())
+        .toArray();
+    const memberIds = [...new Set(contracts.map(c => c.crewMemberId))];
+    if (memberIds.length === 0) return [];
+    return db.crewMembers.where('id').anyOf(memberIds).toArray();
+}
+
+// ── Validation durée minimale contrat (1 mois) ────────────────────
+export function validateContractDuration(
+    dateDebut: string,
+    dateFin: string
+): { valid: boolean; minDateFin: string; message: string } {
+    if (!dateDebut || !dateFin) return { valid: true, minDateFin: '', message: '' };
+
+    const debut = new Date(dateDebut + 'T00:00:00');
+    const fin = new Date(dateFin + 'T00:00:00');
+
+    // Date de fin minimale = dernier jour du même mois que dateDebut
+    const minFin = new Date(debut.getFullYear(), debut.getMonth() + 1, 0);
+    const minFinStr = `${minFin.getFullYear()}-${String(minFin.getMonth() + 1).padStart(2, '0')}-${String(minFin.getDate()).padStart(2, '0')}`;
+
+    if (fin < debut || fin < minFin) {
+        return {
+            valid: false,
+            minDateFin: minFinStr,
+            message: `La durée minimale est 1 mois. Date de fin au plus tôt : ${fmtDate(minFin)}`,
+        };
+    }
+
+    return { valid: true, minDateFin: minFinStr, message: '' };
 }
 
 // ─── PIN & Auth ───────────────────────────────────────────────────────────────
@@ -594,7 +705,12 @@ export async function isSubscriptionActive(): Promise<boolean> {
 }
 
 // ─── Historique exports ───────────────────────────────────────────────────────
-
-export async function logExport(entry: Omit<ExportedFile, 'id'>) {
-    await db.exportedFiles.add(entry);
+export async function logExport(
+    entry: ExportedFileListe
+        | ExportedFileChecklist
+        | ExportedFileContrat
+        | ExportedFileManifeste
+): Promise<void> {
+    const { id: _, ...data } = entry as any;
+    await db.exportedFiles.add(data);
 }

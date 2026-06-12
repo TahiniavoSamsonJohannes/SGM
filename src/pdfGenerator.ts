@@ -1,42 +1,20 @@
 import jsPDF from 'jspdf';
-import type { CrewList, ChecklistDoc } from './db';
-import { computeContractTotals, enrichMembersWithFonction, logExport } from './db';
+import type { CrewList, ChecklistDoc, ExportedFileListe, ExportedFileChecklist, ExportedFileContrat, ExportedFileManifeste } from './db';
+import { type CargoItem, computeContractTotals, enrichMembersWithFonction, logExport } from './db';
 import { sortCrewByHierarchy, calculateAge } from './utils/crewSort';
-import { fmtDate, fmtDateLong, fmtDateShort, fmtNumber } from './utils/fmt';
+import { fmtDate, fmtDateLong, fmtDateNumeric, fmtDateShort, fmtNumber } from './utils/fmt';
+import { formatPoidsKg, totalColis, totalPoidsKg, numberToWords, poidsEnLettres } from './utils/cargoFormat';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function pad2(n: number) { return String(n).padStart(2, '0'); }
 
-function buildFilename(prefix: 'AE_LISTE_EQUIPAGE' | 'AE_CHECKLIST'): string {
+function buildFilename(prefix: 'AE_LISTE_EQUIPAGE' | 'AE_CHECKLIST' | 'AE_MANIFESTE_CARGO' | 'AE_CONTRAT'): string {
     const now = new Date();
     const date = `${pad2(now.getDate())}${pad2(now.getMonth() + 1)}${now.getFullYear()}`;
     const ms = now.getTime();
-    return `${prefix}_${date}_${ms}`;
+    return `${prefix}_${date}_${ms}.pdf`;
 }
-
-const numberToWords = (n: number): string => {
-    const units = [
-        'zéro', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf',
-        'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize',
-        'dix-sept', 'dix-huit', 'dix-neuf',
-    ];
-    const tens = [
-        '', '', 'vingt', 'trente', 'quarante', 'cinquante',
-        'soixante', 'soixante-dix', 'quatre-vingt', 'quatre-vingt-dix',
-    ];
-    if (n < 20) return units[n];
-    if (n < 100) {
-        const t = Math.floor(n / 10), u = n % 10;
-        if (t === 7) return 'soixante-' + units[10 + u];
-        if (t === 9) return 'quatre-vingt-' + units[10 + u];
-        const suffix = t === 8
-            ? (u === 0 ? 's' : '-' + units[u])
-            : (u > 0 ? '-' + units[u] : '');
-        return tens[t] + suffix;
-    }
-    return n.toString();
-};
 
 async function loadLogo(name: string): Promise<HTMLImageElement | null> {
     return new Promise(resolve => {
@@ -496,12 +474,15 @@ async function buildChecklistDoc(doc_: ChecklistDoc): Promise<jsPDF> {
 export async function generateCrewListPDF(list: CrewList): Promise<void> {
     const doc = await buildCrewListDoc(list);
     const filename = buildFilename('AE_LISTE_EQUIPAGE');
-    doc.save(`${filename}.pdf`);
+    doc.save(filename);
     await logExport({
-        type: 'liste', filename: `${filename}.pdf`,
-        shipName: list.shipName, destination: list.destination,
-        membersCount: list.members.length, exportedAt: new Date()
-    });
+        type: 'liste',
+        filename,
+        shipName: list.shipName,
+        destination: list.destination,
+        membersCount: list.members.length,
+        exportedAt: new Date()
+    } satisfies Omit<ExportedFileListe, 'id'>);
 }
 
 export async function previewCrewListPDF(list: CrewList): Promise<string> {
@@ -513,12 +494,14 @@ export async function previewCrewListPDF(list: CrewList): Promise<string> {
 export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
     const doc = await buildChecklistDoc(doc_);
     const filename = buildFilename('AE_CHECKLIST');
-    doc.save(`${filename}.pdf`);
+    doc.save(filename);
     await logExport({
-        type: 'checklist', filename: `${filename}.pdf`,
-        shipName: doc_.shipName, destination: doc_.destination,
-        membersCount: doc_.members.length, exportedAt: new Date()
-    });
+        type: 'checklist',
+        filename,
+        shipName: doc_.shipName,
+        membersCount: doc_.members.length,
+        exportedAt: new Date()
+    } satisfies Omit<ExportedFileChecklist, 'id'>);
 }
 
 export async function previewChecklistPDF(doc_: ChecklistDoc): Promise<string> {
@@ -852,19 +835,381 @@ async function buildContractDoc(data: ContractPDFData): Promise<jsPDF> {
 export async function generateContractPDF(data: ContractPDFData): Promise<void> {
     const doc = await buildContractDoc(data);
     const now = new Date();
-    const pad2 = (n: number) => String(n).padStart(2, '0');
-    const dateStr = `${pad2(now.getDate())}${pad2(now.getMonth() + 1)}${now.getFullYear()}`;
-    const filename = `AE_CONTRAT_${data.nom.toUpperCase()}_${dateStr}_${now.getTime()}.pdf`;
+    const date = `${pad2(now.getDate())}${pad2(now.getMonth() + 1)}${now.getFullYear()}`;
+    const ms = now.getTime();
+    const filename = `AE_CONTRAT_${data.nom}_${data.prenom}_${date}_${ms}.pdf`;
     doc.save(filename);
     await logExport({
-        type: 'liste', filename,
-        shipName: data.shipName, destination: data.fonction,
-        membersCount: 1, exportedAt: now,
-    });
+        type: 'contrat',
+        filename,
+        memberNom: `${data.nom} ${data.prenom}`,
+        fonction: data.fonction,
+        exportedAt: new Date(),
+    } satisfies Omit<ExportedFileContrat, 'id'>);
 }
 
 export async function previewContractPDF(data: ContractPDFData): Promise<string> {
     const doc = await buildContractDoc(data);
+    const blob = doc.output('blob');
+    return URL.createObjectURL(blob);
+}
+
+// --------------------
+// MANIFESTE
+// --------------------
+
+export interface ManifestePDFData {
+    shipName: string;
+    capitaine: string;
+    lieuDepart: string;
+    destination: string;
+    date: string;        // ex: "06 MAI 2026"
+    agentResponsable: string;
+    cargoItems: CargoItem[];
+    // Totaux (calculés automatiquement si non fournis)
+    totalColisStr?: string;
+    totalPoidsStr?: string;
+    totalColisLettre?: string;
+    totalPoidsLettre?: string;
+}
+
+async function buildManifesteDoc(data: ManifestePDFData): Promise<jsPDF> {
+    const doc = new jsPDF('p', 'mm', 'a4', true) as any;
+
+    const pageWidth = doc.internal.pageSize.getWidth() as number;
+    const pageHeight = doc.internal.pageSize.getHeight() as number;
+    const marginX = 12;
+    const marginY = 13;
+
+    // ── Helpers ──────────────────────────────────────────────────────
+    function addHeader(currentY: number) {
+        let y = currentY;
+        doc.setFont('times', 'bold');
+        doc.setFontSize(11);
+        doc.setLineWidth(0.3);
+        doc.text('MANIFESTE CARGO', pageWidth / 2, y, { align: 'center' });
+        doc.line(pageWidth / 2 - 19, y + 0.5, pageWidth / 2 + 19, y + 0.5);
+
+        y += 7;
+        doc.setFontSize(8.5);
+        doc.setFont('times', 'bold');
+        doc.text('ARMEMENT EUSTRATIOU', marginX, y);
+
+        y += 6;
+        doc.setFont('times', 'normal');
+        doc.text(`Navire : ${data.shipName}`, marginX, y);
+        doc.text(`Départ : ${data.lieuDepart}`, pageWidth / 2 + 19, y);
+
+        y += 3.5;
+        doc.text(`Capitaine : ${data.capitaine}`, marginX, y);
+        doc.text(`Destination : ${data.destination}`, pageWidth / 2 + 19, y);
+
+        y += 3.5;
+        doc.text(`Date : ${data.date}`, marginX, y);
+        doc.text(`Agent responsable: ${data.agentResponsable}`, pageWidth / 2 + 19, y);
+
+        return y;
+    }
+
+    // ── Colonnes ─────────────────────────────────────────────────────
+    const percent = [3, 19, 19, 10, 24, 17.5, 9.5];
+    const usable = pageWidth - marginX * 2;
+    const col = percent.map(p => (p / 100) * usable);
+    const sumPercent = percent.reduce((a, b) => a + b, 0);
+    const tableWidth = (sumPercent / 100) * (pageWidth - marginX);
+
+    const headers = ['N°', 'Chargeur', 'Destinataire', 'Nb de colis',
+        'Espèces et contenu', 'N° de DÉCLARATION', 'Poids'];
+    const lineHeight = 3.5;
+
+    // ── Première passe : rendu ────────────────────────────────────────
+    doc.setLineWidth(0.3);
+    doc.setFont('times', 'bold');
+
+    let y = marginY;
+    y = addHeader(y);
+
+    // En-tête du tableau
+    y += 2.5;
+    let yRowStart = y;
+
+    function drawTableHeader(startY: number) {
+        let x = marginX;
+        doc.setFont('times', 'bold');
+        doc.setFontSize(8.5);
+        headers.forEach((h, i) => {
+            doc.rect(x, startY, col[i], 4);
+            doc.text(h, x + col[i] / 2, startY + 3, { align: 'center' });
+            x += col[i];
+        });
+    }
+    drawTableHeader(y);
+    y += 4;
+
+    // ── Données ───────────────────────────────────────────────────────
+    let xVerticalLine: number;
+
+    function drawVerticalLines(fromY: number, toY: number) {
+        xVerticalLine = marginX;
+        for (let i = 0; i < col.length; i++) {
+            if (i === 0) doc.line(xVerticalLine, fromY, xVerticalLine, toY);
+            xVerticalLine += col[i];
+            doc.line(xVerticalLine, fromY, xVerticalLine, toY);
+        }
+    }
+
+    function newPage(end?: boolean) {
+        if (!end) {
+            y = pageHeight - 20;
+            // END PAGE LINE
+            doc.line(marginX, y, tableWidth, y);
+            drawVerticalLines(yRowStart, y);
+        } else {
+            drawVerticalLines(yRowStart, y - 4);
+        }
+        doc.addPage();
+        y = yRowStart = marginY;
+        // START PAGE LINE
+        if (!end) {
+            doc.line(marginX, y, tableWidth, y);
+        }
+    }
+
+    data.cargoItems.forEach((item, rowIndex) => {
+        const x0 = marginX;
+
+        // Préparer les textes
+        const chargeurLines = [
+            ...doc.splitTextToSize(item.expediteurNom, col[1] - 3),
+            ...doc.splitTextToSize(item.expediteurAdresse, col[1] - 3),
+            ...(item.numCommande ? doc.splitTextToSize(item.numCommande, col[1] - 1) : []),
+            ...(item.numConteneur ? doc.splitTextToSize(item.numConteneur, col[1] - 1) : []),
+        ];
+        const destLines = [
+            ...doc.splitTextToSize(item.destinataireNom, col[2] - 3),
+            ...doc.splitTextToSize(item.destinataireAdresse, col[2] - 3),
+        ];
+        const declLines = [
+            ...doc.splitTextToSize(item.numDeclaration, col[5] - 1),
+            ...doc.splitTextToSize(fmtDateNumeric(item.dateDeclaration), col[5] - 1),
+        ];
+
+        // Calculer la hauteur totale de la ligne
+        const marchandisesLineCount = item.marchandises.reduce((sum, m) => {
+            return sum + doc.splitTextToSize(m.description, col[4] - 1).length;
+        }, 0); // +1 par marchandise pour l'espacement
+
+        const maxLines = Math.max(
+            chargeurLines.length,
+            destLines.length,
+            declLines.length,
+            marchandisesLineCount,
+        );
+        const maxLines2 = Math.max(
+            chargeurLines.length,
+            destLines.length,
+            declLines.length,
+        );
+
+        let rowHeight = maxLines * lineHeight;
+
+        // Vérifier si besoin d'une nouvelle page
+        if (y + maxLines2 * lineHeight > pageHeight - 20) {
+            newPage();
+        }
+
+        let yRow = y + 4;
+
+        // Col 0 — N°
+        doc.setFont('times', 'bold');
+        doc.setFontSize(8.5);
+        doc.text(
+            String(item.ordre ?? rowIndex + 1),
+            x0 + col[0] / 2, yRow,
+            { align: 'center' }
+        );
+
+        // Col 1 — Chargeur
+        doc.setFont('times', 'bold');
+        doc.setFontSize(8.5);
+        let cx = x0 + col[0] + 1;
+        chargeurLines.forEach((line: string, li: number) => {
+            if (item.expediteurNom.includes(line) || item.expediteurAdresse.includes(line)) {
+                doc.setFont('times', 'bold');
+            } else doc.setFont('times', 'normal');
+            doc.text(line, cx, yRow + li * lineHeight, {
+                maxWidth: col[1] - 1,
+            });
+        });
+
+        // Col 2 — Destinataire
+        doc.setFont('times', 'bold');
+        cx = x0 + col[0] + col[1] + 1;
+        destLines.forEach((line: string, li: number) => {
+            doc.text(line, cx, yRow + li * lineHeight, {
+                maxWidth: col[2] - 1,
+            });
+        });
+
+        // Col 5 — Déclaration
+        cx = x0 + col[0] + col[1] + col[2] + col[3] + col[4];
+        doc.setFont('times', 'bold');
+        declLines.forEach((line: string, li: number) => {
+            doc.text(line, cx + 1, yRow + li * lineHeight, {
+                maxWidth: col[5] - 1,
+            });
+        });
+
+        // Cols 3, 4, 5 — Marchandises
+        let yColis = yRow;
+        cx = x0 + col[0] + col[1] + col[2];
+
+        const totalMarchandises = item.marchandises.length;
+        let leftMarchandises;
+        item.marchandises.forEach((m, idx) => {
+            let nextIdx = (idx + 1) >= (item.marchandises.length - 1) ? (item.marchandises.length - 1) : (idx + 1);
+            let nextColisLines = doc.splitTextToSize(item.marchandises[nextIdx].description, col[4] - 1).length;
+
+            if (yColis + nextColisLines * lineHeight > pageHeight - 20) {
+                newPage();
+                yRow = y;
+                leftMarchandises = totalMarchandises - (idx + 1);
+                yColis = marginY + 4;
+                rowHeight = leftMarchandises * lineHeight;
+            }
+            // Col 3 — Nb colis (centré)
+            doc.setFont('times', 'normal');
+            doc.setFontSize(8.5);
+            doc.text(
+                String(m.nbColis),
+                cx + col[3] / 2, yColis,
+                { align: 'center' }
+            );
+
+            // Col 4 — Description
+            const descLines: string[] = doc.splitTextToSize(m.description, col[4] - 2);
+            descLines.forEach((line: string, li: number) => {
+                doc.text(line, cx + col[3] + 1, yColis + li * lineHeight, {
+                    maxWidth: col[4] - 1,
+                });
+            });
+
+            // Col 6 — Poids
+            doc.setFont('times', 'bold');
+            const poidsStr = formatPoidsKg(m.poidsKg);
+            doc.text(
+                poidsStr,
+                cx + col[3] + col[4] + col[5] + col[6] / 2,
+                yColis,
+                { align: 'center' }
+            );
+            doc.setFont('times', 'normal');
+
+            yColis += descLines.length * lineHeight + 1;
+        });
+
+        // Hauteur effective
+        rowHeight = Math.max(rowHeight, (yColis - yRow));
+
+        y = yRow + rowHeight;
+    });
+
+    // Ligne de fermeture du tableau
+    doc.line(marginX, y, tableWidth, y);
+    if (doc.internal.getNumberOfPages() > 1) {
+        drawVerticalLines(marginY, y);
+    } else {
+        drawVerticalLines(yRowStart, y);
+    }
+
+    // ── Ligne TOTAL ────────────────────────────────────────────────
+    if (y > pageHeight - 20) { newPage(true); }
+
+    const totalColisVal = data.totalColisStr ?? String(totalColis(data.cargoItems));
+    const totalPoidsVal = data.totalPoidsStr ??
+        totalPoidsKg(
+            data.cargoItems.flatMap(i => i.marchandises.map(m => ({ poidsKg: m.poidsKg })))
+        );
+
+    let xTot = marginX + col[0] + col[1] + col[2];
+    doc.setFont('times', 'normal');
+    doc.setFontSize(8.5);
+    [[3, totalColisVal, 'center'], [4, 'TOTAL', 'center'], [5, '', 'center'], [6, totalPoidsVal, 'center']].forEach(
+        ([ci, txt, align]) => {
+            if (ci === 6) doc.setFont('times', 'bold');
+            const idx = ci as number;
+            doc.text(String(txt), xTot + col[idx] / 2, y + 3, { align: align as any });
+            doc.rect(xTot, y, col[idx], 4);
+            xTot += col[idx];
+        }
+    );
+    y += 4;
+
+    // ── Footer ────────────────────────────────────────────────────
+    const footerH = 24;
+    if (y + footerH > pageHeight - 10) { newPage(true); }
+    else { y += 5; }
+
+    const xCenter = marginX + col[0] + col[1] + col[2] + col[3] + col[4] / 2;
+    doc.setFont('times', 'normal');
+    doc.setFontSize(8);
+    doc.text(`Mahajanga, le ${data.date}`, xCenter, y, { align: 'center' });
+    y += 8;
+
+    const colisLettre = data.totalColisLettre ?? numberToWords(parseInt(totalColisVal));
+    const poidsLettre = poidsEnLettres(totalPoidsVal);
+
+    doc.text(
+        `Arrêté le présent manifeste au nombre de ${colisLettre} colis (${totalColisVal})`,
+        marginX, y
+    );
+    y += 6;
+
+    doc.text(
+        `Colis pesant ${poidsLettre} (${totalPoidsVal})`,
+        marginX, y
+    );
+    y += 10;
+
+    doc.text('Service de douane', marginX, y);
+    doc.text('Le capitaine', xCenter, y, { align: 'center' });
+
+    // ── Numérotation des pages ────────────────────────────────────
+    const total = doc.internal.getNumberOfPages();
+    const rightX = (sumPercent / 100) * (pageWidth - marginX); // aligné avec le bord droit du tableau
+
+    for (let p = 1; p <= total; p++) {
+        doc.setPage(p);
+        doc.setFont('times', 'normal');
+        doc.setFontSize(9);
+        doc.text(
+            `${p} sur ${total}`,
+            rightX,
+            pageHeight - 10,
+            { align: 'right' }
+        );
+    }
+
+    return doc;
+}
+
+// ── API publique ──────────────────────────────────────────────────
+export async function generateManifestePDF(data: ManifestePDFData): Promise<void> {
+    const doc = await buildManifesteDoc(data);
+    const filename = buildFilename('AE_MANIFESTE_CARGO');
+    doc.save(filename);
+    await logExport({
+        type: 'manifeste',
+        filename,
+        shipName: data.shipName,
+        destination: data.destination,
+        cargoCount: data.cargoItems.length,
+        exportedAt: new Date(),
+    } satisfies Omit<ExportedFileManifeste, 'id'>);
+}
+
+export async function previewManifestePDF(data: ManifestePDFData): Promise<string> {
+    const doc = await buildManifesteDoc(data);
     const blob = doc.output('blob');
     return URL.createObjectURL(blob);
 }

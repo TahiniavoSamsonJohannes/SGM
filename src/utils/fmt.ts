@@ -18,6 +18,14 @@ export function fmtDate(d: Date): string {
     });
 }
 
+export function fmtDateNumeric(iso: string): string {
+  if (!iso) return '';
+  // ISO YYYY-MM-DD → DD/MM/YYYY
+  const parts = iso.split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return iso;
+}
+
 // ── Formatage nombre avec séparateur de milliers ──────────────────
 export function fmtNumber(n: number): string {
     if (!n && n !== 0) return '0';

@@ -110,8 +110,13 @@ export default function AccountPage() {
                             </div>
                             <div className="bg-navy-700 rounded-lg p-3">
                                 <div className="text-xs text-slate-500 mb-1">Statut</div>
-                                <div className={`text-sm font-medium
-                  ${isActive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                <div className={`text-sm font-medium ${isActive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {isActive && <div className="relative inline-flex mr-1 w-fit items-center justify-center">
+                                        {/* Pulsation */}
+                                        <span className="absolute inline-flex h-2 w-2 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite] rounded-full bg-green-400 opacity-75" />
+                                        {/* Cercle principal */}
+                                        <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                                    </div>}
                                     {isActive ? 'Actif' : 'Expiré'}
                                 </div>
                             </div>

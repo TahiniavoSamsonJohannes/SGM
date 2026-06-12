@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-    Save, Download, Search, AlertCircle, CheckSquare, ArrowLeft,
+    Save, Search, CheckSquare, ArrowLeft,
+    Info,
+    AlertCircle,
 } from 'lucide-react';
-import { db, enrichCrewListMembers, enrichMembersWithFonction, type CrewList } from '../db';
-import { generateCrewListPDF } from '../pdfGenerator';
+import { db, enrichCrewListMembers, enrichMembersWithFonction, getMembersByShip, type CrewList, type CrewMemberWithFonction } from '../db';
 import AutoComplete from '../components/AutoComplete';
 import Input from '../components/Input';
-import CustomSelect from '../components/CustomSelect';
 import { sortCrewByHierarchy } from '../utils/crewSort';
+import ShipSelect from '../components/ShipSelect';
+import rudderUrl from '../assets/rudder.png';
 
 interface Props {
     editingList?: CrewList | null;
@@ -50,6 +52,11 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
     // Capitaine auto-sélection
     const [capitaineError, setCapitaineError] = useState('');
     const lastAutoSelectedCapRef = useRef<number | null>(null);
+
+    // État pour les membres du navire
+    const [shipMembersWithFonction, setShipMembersWithFonction] = useState<CrewMemberWithFonction[]>([]);
+    const [loadingMembers, setLoadingMembers] = useState(false);
+
 
 
     // ── Pré-remplir si édition ─────────────────────────────────────────
@@ -124,10 +131,20 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
         )
     );
 
-    const filtered = membersWithFonction.filter(m =>
+    // Charger les membres quand le navire change
+    useEffect(() => {
+        if (!selectedShip) { setShipMembersWithFonction([]); return; }
+        setLoadingMembers(true);
+        getMembersByShip(selectedShip.nom).then(async members => {
+            const enriched = await enrichMembersWithFonction(members);
+            setShipMembersWithFonction(enriched);
+            setLoadingMembers(false);
+        });
+    }, [selectedShip?.id]);
+
+    const filteredShipMembers = shipMembersWithFonction.filter(m =>
         `${m.nom} ${m.prenom} ${m.fonction}`
-            .toLowerCase()
-            .includes(search.toLowerCase())
+            .toLowerCase().includes(search.toLowerCase())
     );
 
     const toggle = (id: number) =>
@@ -185,22 +202,6 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
         onSaved?.();
     };
 
-    // ── Export PDF ─────────────────────────────────────────────────────
-    const exportPDF = () => {
-        if (!validate() || !selectedShip) return;
-        generateCrewListPDF({
-            shipId: selectedShip.id!,
-            shipName: selectedShip.nom,
-            capitaine,
-            lieuDepart,
-            destination,
-            referDossier,
-            members: selectedMembers.map(({ fonction, ...m }) => m),
-            createdAt: editingList?.createdAt ?? new Date(),
-            updatedAt: new Date(),
-        });
-    };
-
     return (
         <div className="space-y-5 fade-in">
 
@@ -232,22 +233,18 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
 
                     {/* Navire */}
                     <div>
-                        <CustomSelect
+                        <ShipSelect
                             label="Navire *"
                             value={shipId}
                             onChange={v => {
                                 setShipId(v);
+                                setSelected([]);   // réinitialiser les membres sélectionnés
                                 setErrors(e => ({ ...e, shipId: '' }));
                             }}
-                            options={ships.map(s => ({
-                                value: String(s.id),
-                                label: s.nom.toUpperCase(),
-                            }))}
-                            placeholder="Sélectionner un navire..."
+                            ships={ships}
+                            placeholder="Rechercher un navire..."
+                            error={errors.shipId}
                         />
-                        {errors.shipId && (
-                            <p className="text-rose-400 text-xs mt-1">{errors.shipId}</p>
-                        )}
                     </div>
 
                     {/* Capitaine */}
@@ -341,20 +338,41 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
                     <p className="text-rose-400 text-xs">{errors.members}</p>
                 )}
 
-                {membersWithFonction.length === 0 ? (
-                    <div className="text-center text-slate-500 py-5 text-sm">
+
+                {!selectedShip ? (
+                    <div className="animate-fade-in text-center text-slate-500 py-5 text-sm">
+                        <Info size={18} className="mx-auto mb-2 opacity-40" />
+                        Sélectionnez d'abord un navire
+                    </div>
+                ) : loadingMembers ? (
+                    <div className="flex justify-center py-5">
+                        {/* Image gouvernail en rotation */}
+                        <img
+                            src={rudderUrl}
+                            alt="Chargement..."
+                            className="w-12 h-w-12 object-contain saturate-200 opacity-80"
+                            style={{
+                                animation: 'spin 2s linear infinite',
+                            }}
+                        />
+                    </div>
+                ) : filteredShipMembers.length === 0 ? (
+                    <div className="animate-fade-in text-center text-slate-500 py-5 text-sm">
                         <AlertCircle size={18} className="mx-auto mb-2 opacity-40" />
-                        Ajoutez d'abord des membres
+                        {search
+                            ? 'Aucun membre trouvé'
+                            : 'Aucun membre avec un contrat pour ce navire'
+                        }
                     </div>
                 ) : (
                     // Hauteur max fixe + scroll interne
                     <div className="max-h-64 overflow-y-auto custom-scroll space-y-1.5 pr-1">
-                        {filtered.map(m => (
+                        {filteredShipMembers.map(m => (
                             <label
                                 key={m.id}
-                                className={`flex items-center gap-3 p-2.5 rounded-lg border
-                  cursor-pointer transition
-                  ${selected.includes(m.id!)
+                                className={`item-enter flex items-center gap-3 p-2.5 rounded-lg border
+                                        cursor-pointer transition
+                                        ${selected.includes(m.id!)
                                         ? 'border-ocean-500 bg-ocean-600/10'
                                         : 'border-navy-600 hover:border-navy-500'
                                     }`}
@@ -415,13 +433,6 @@ export default function CrewListPage({ editingList, onSaved, onBack }: Props) {
             border border-navy-500 transition"
                 >
                     <Save size={15} /> Enregistrer
-                </button>
-                <button
-                    onClick={exportPDF}
-                    className="flex items-center gap-2 bg-ocean-600 hover:bg-ocean-500
-            text-white px-5 py-2 rounded-lg text-sm font-medium transition"
-                >
-                    <Download size={15} /> Exporter PDF
                 </button>
             </div>
         </div>

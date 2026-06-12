@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Plus, Edit3, Trash2, Save, Users, Search } from 'lucide-react';
+import { Plus, Edit3, Trash2, Save, Users } from 'lucide-react';
 import {
     db, addOrIncrementDynamic,
     type CrewMember,
     enrichMembersWithFonction,
+    deleteMemberWithContracts,
 } from '../db';
 import AutoComplete from '../components/AutoComplete';
 import Input from '../components/Input';
@@ -13,6 +14,9 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import DatePicker from '../components/DatePicker';
 import { fmtDate } from '../utils/fmt';
 import { useDeleteAnimation } from '../hooks/useDeleteAnimation';
+import type { FilterGroup } from '../components/FilterPanel';
+import FilterPanel from '../components/FilterPanel';
+import SearchBar from '../components/SearchBar';
 
 // ── emptyForm sans fonction ────────────────────────────────────────
 function emptyForm() {
@@ -106,8 +110,23 @@ export default function CrewPage() {
     }, []) ?? [];
     const dynamicValues = useLiveQuery(() => db.dynamicValues.toArray()) ?? [];
 
-    const { triggerDelete, isDeleting } = useDeleteAnimation(1000);
+    const { triggerDelete, isDeleting } = useDeleteAnimation(1300);
 
+    // Groupes de filtres
+    const filterGroups: FilterGroup[] = [
+        {
+            key: 'statut', label: 'Statut contrat', type: 'single',
+            options: [
+                { value: 'actif', label: 'Actif' },
+                { value: 'expire', label: 'Expiré' },
+                { value: 'sans_contrat', label: 'Sans contrat' },
+            ],
+        },
+    ];
+
+    const [filters, setFilters] = useState<Record<string, string | string[]>>({
+        statut: '',
+    });
 
     // Tri décroissant par updatedAt
     const members = [...membersWithFonction].sort(
@@ -120,6 +139,17 @@ export default function CrewPage() {
     const [form, setForm] = useState(emptyForm());
     const [formError, setFormError] = useState('');
     const [deleting, setDeleting] = useState<CrewMember | null>(null);
+    const [confirmModal, setConfirmModal] = useState<boolean>(false);
+
+    const cancelTimeoutRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (cancelTimeoutRef.current) {
+                clearTimeout(cancelTimeoutRef.current);
+            }
+        }
+    }, []);
 
     const getSuggestions = (type: 'fascicule' | 'brevet' | 'nationalite') =>
         dynamicValues.filter(v => v.type === type).map(v => v.value);
@@ -196,17 +226,44 @@ export default function CrewPage() {
         setModal(null);
     };
 
+    const handleCancel = () => {
+        if (cancelTimeoutRef.current) {
+            clearTimeout(cancelTimeoutRef.current);
+        }
+        setConfirmModal(false);
+        cancelTimeoutRef.current = window.setTimeout(() => {
+            setDeleting(null);
+        }, 1000);
+    }
+
     const confirmDelete = async (member: CrewMember) => {
         if (!member.id) return;
-        setDeleting(null); // fermer le ConfirmDialog immédiatement
-        await triggerDelete(member.id, () => db.crewMembers.delete(member.id!));
+        setDeleting(null);
+        await triggerDelete(
+            member.id,
+            () => deleteMemberWithContracts(member.id!)
+        );
     };
 
-    const filtered = members.filter(m =>
-        `${m.nom} ${m.prenom} ${m.fonction}`
-            .toLowerCase()
-            .includes(search.toLowerCase())
-    );
+    const handleFilterChange = (key: string, value: string | string[]) =>
+        setFilters(f => ({ ...f, [key]: value }));
+
+    const resetFilters = () => setFilters({ statut: '' });
+
+    // Filtrage
+    const filtered = members.filter(m => {
+        const matchSearch = `${m.nom} ${m.prenom} ${m.fonction}`
+            .toLowerCase().includes(search.toLowerCase());
+
+        const statut = filters.statut as string;
+        const matchStatut = !statut || (
+            statut === 'actif' ? m.contratActif === true :
+                statut === 'expire' ? m.contratActif === false :
+                    statut === 'sans_contrat' ? m.contratActif === null : true
+        );
+
+        return matchSearch && matchStatut;
+    });
 
     return (
         <div className="h-full flex flex-col gap-4 overflow-hidden fade-in">
@@ -224,14 +281,22 @@ export default function CrewPage() {
             </div>
 
             {/* Recherche */}
-            <div className="relative flex-shrink-0">
-                <Search size={15}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input value={search} onChange={e => setSearch(e.target.value)}
-                    placeholder="Rechercher par nom, fascicule..."
-                    className="w-full bg-navy-800 border border-navy-600 rounded-lg
-            pl-9 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500
-            focus:outline-none focus:border-ocean-500 transition" />
+            <SearchBar
+                value={search}
+                onChange={setSearch}
+                placeholder="Rechercher par nom, fascicule..."
+            />
+            <div className="flex items-center justify-between flex-shrink-0">
+                <span className="text-xs text-slate-500">
+                    {filtered.length} membre{filtered.length > 1 ? 's' : ''}
+                    {search || filters.statut ? ` sur ${members.length}` : ''}
+                </span>
+                <FilterPanel
+                    groups={filterGroups}
+                    values={filters}
+                    onChange={handleFilterChange}
+                    onReset={resetFilters}
+                />
             </div>
 
             {/* Liste scrollable */}
@@ -250,7 +315,7 @@ export default function CrewPage() {
                             className={`bg-navy-800 border border-navy-600 rounded-xl p-4
                                 flex items-center justify-between hover:border-navy-500
                                 transition cursor-pointer
-                                ${isDeleting(m.id!) ? 'item-deleting' : ''}`}
+                                ${isDeleting(m.id!) ? 'item-deleting' : 'item-enter'}`}
                         >
                             <div className="flex items-center gap-3 min-w-0">
                                 <div className="w-9 h-9 rounded-full bg-ocean-600/20
@@ -288,13 +353,13 @@ export default function CrewPage() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex gap-2 flex-shrink-0 ml-2"
+                            <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0 ml-2"
                                 onClick={e => e.stopPropagation()}>
                                 <button onClick={() => openEdit(m)}
                                     className="text-slate-400 hover:text-ocean-400 transition p-1">
                                     <Edit3 size={15} />
                                 </button>
-                                <button onClick={() => setDeleting(m)}
+                                <button onClick={() => { setDeleting(m); setConfirmModal(true) }}
                                     className="text-slate-400 hover:text-rose-400 transition p-1">
                                     <Trash2 size={15} />
                                 </button>
@@ -413,13 +478,13 @@ export default function CrewPage() {
 
             {/* Confirmation suppression */}
             <ConfirmDialog
-                open={!!deleting}
+                open={confirmModal}
                 title="Supprimer le membre"
                 message={`Supprimer ${deleting?.nom} ${deleting?.prenom} ?`}
                 confirmLabel="Supprimer"
                 danger
                 onConfirm={() => deleting && confirmDelete(deleting)}
-                onCancel={() => setDeleting(null)}
+                onCancel={handleCancel}
             />
         </div>
     );
