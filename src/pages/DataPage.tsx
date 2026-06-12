@@ -127,7 +127,6 @@ export default function DataPage() {
             await db.crewMembers.clear();
             await db.ships.clear();
             await db.crewLists.clear();
-            await db.checklistDocs.clear();
             await db.exportedFiles.clear();
             await db.dynamicValues.clear();
             await db.contracts.clear();
@@ -189,7 +188,6 @@ export default function DataPage() {
             await db.crewMembers.clear();
             await db.ships.clear();
             await db.crewLists.clear();
-            await db.checklistDocs.clear();
             await db.contracts.clear();
             await db.cargoItems.clear();
             await db.exportedFiles.clear();

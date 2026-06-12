@@ -207,7 +207,6 @@ class MaritimeDB extends Dexie {
     crewMembers!: Table<CrewMember>;
     ships!: Table<Ship>;
     crewLists!: Table<CrewList>;
-    checklistDocs!: Table<ChecklistDoc>;
     exportedFiles!: Table<ExportedFile>;
     dynamicValues!: Table<DynamicValue>;
     authConfig!: Table<AuthConfig>;
@@ -217,7 +216,7 @@ class MaritimeDB extends Dexie {
 
     constructor() {
         super('MaritimeDB');
-        this.version(11).stores({
+        this.version(12).stores({
             crewMembers: '++id, nom, prenom, fascicule, nationalite',
             ships: '++id, nom, immatriculation',
             crewLists: '++id, shipId, updatedAt',
