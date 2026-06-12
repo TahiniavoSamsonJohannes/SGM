@@ -600,12 +600,12 @@ export default function CargoPage({ voyage, onBack }: Props) {
                                 )}
                                 {viewingCargo.numCommande && (
                                     <div className="text-slate-500 text-xs mt-1">
-                                        Cmd : {viewingCargo.numCommande}
+                                        Cont : {viewingCargo.numCommande}
                                     </div>
                                 )}
                                 {viewingCargo.numConteneur && (
                                     <div className="text-slate-500 text-xs">
-                                        Cont : {viewingCargo.numConteneur}
+                                        Plomb : {viewingCargo.numConteneur}
                                     </div>
                                 )}
                             </div>
