@@ -25,6 +25,46 @@ async function loadLogo(name: string): Promise<HTMLImageElement | null> {
     });
 }
 
+export interface ContractPDFData {
+    nom: string;
+    prenom: string;
+    dateNaissance: string;
+    lieuNaissance: string;
+    adresse: string;
+    fascicule: string;
+    shipName: string;
+    immatriculation: string;
+    fonction: string;
+    dateDebut: string;
+    dateFin: string;
+    salaireBaseJournalier: number;
+    forfaitHeuresSupp: number;
+    salaireCongeJournalier: number;
+    indemRNC: number;
+    totalSalaireBase: number;
+    totalForfait: number;
+    totalConge: number;
+    totalRNC: number;
+    beneficiaire: string;
+    numCompteBancaire: string;
+    montantDelegation: number;
+}
+
+export interface ManifestePDFData {
+    shipName: string;
+    capitaine: string;
+    lieuDepart: string;
+    destination: string;
+    date: string;        // ex: "06 MAI 2026"
+    agentResponsable: string;
+    cargoItems: CargoItem[];
+    // Totaux (calculés automatiquement si non fournis)
+    totalColisStr?: string;
+    totalPoidsStr?: string;
+    totalColisLettre?: string;
+    totalPoidsLettre?: string;
+}
+
 // ── Builders internes ─────────────────────────────────────────────
 async function buildCrewListDoc(list: CrewList): Promise<jsPDF> {
     const doc = new jsPDF({
@@ -470,72 +510,6 @@ async function buildChecklistDoc(doc_: ChecklistDoc): Promise<jsPDF> {
     return doc;
 }
 
-// ── API publique ──────────────────────────────────────────────────
-export async function generateCrewListPDF(list: CrewList): Promise<void> {
-    const doc = await buildCrewListDoc(list);
-    const filename = buildFilename('AE_LISTE_EQUIPAGE');
-    doc.save(filename);
-    await logExport({
-        type: 'liste',
-        filename,
-        shipName: list.shipName,
-        destination: list.destination,
-        membersCount: list.members.length,
-        exportedAt: new Date()
-    } satisfies Omit<ExportedFileListe, 'id'>);
-}
-
-export async function previewCrewListPDF(list: CrewList): Promise<string> {
-    const doc = await buildCrewListDoc(list);
-    const blob = doc.output('blob');
-    return URL.createObjectURL(blob);
-}
-
-export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
-    const doc = await buildChecklistDoc(doc_);
-    const filename = buildFilename('AE_CHECKLIST');
-    doc.save(filename);
-    await logExport({
-        type: 'checklist',
-        filename,
-        shipName: doc_.shipName,
-        membersCount: doc_.members.length,
-        exportedAt: new Date()
-    } satisfies Omit<ExportedFileChecklist, 'id'>);
-}
-
-export async function previewChecklistPDF(doc_: ChecklistDoc): Promise<string> {
-    const doc = await buildChecklistDoc(doc_);
-    const blob = doc.output('blob');
-    return URL.createObjectURL(blob);
-}
-
-export interface ContractPDFData {
-    nom: string;
-    prenom: string;
-    dateNaissance: string;
-    lieuNaissance: string;
-    adresse: string;
-    fascicule: string;
-    shipName: string;
-    immatriculation: string;
-    fonction: string;
-    dateDebut: string;
-    dateFin: string;
-    salaireBaseJournalier: number;
-    forfaitHeuresSupp: number;
-    salaireCongeJournalier: number;
-    indemRNC: number;
-    totalSalaireBase: number;
-    totalForfait: number;
-    totalConge: number;
-    totalRNC: number;
-    beneficiaire: string;
-    numCompteBancaire: string;
-    montantDelegation: number;
-}
-
-// ── Builder interne contrat ────────────────────────────────────────
 async function buildContractDoc(data: ContractPDFData): Promise<jsPDF> {
     const doc = new jsPDF({
         orientation: 'portrait',
@@ -831,48 +805,6 @@ async function buildContractDoc(data: ContractPDFData): Promise<jsPDF> {
     return doc;
 }
 
-// ── API publique contrat ───────────────────────────────────────────
-export async function generateContractPDF(data: ContractPDFData): Promise<void> {
-    const doc = await buildContractDoc(data);
-    const now = new Date();
-    const date = `${pad2(now.getDate())}${pad2(now.getMonth() + 1)}${now.getFullYear()}`;
-    const ms = now.getTime();
-    const filename = `AE_CONTRAT_${data.nom}_${data.prenom}_${date}_${ms}.pdf`;
-    doc.save(filename);
-    await logExport({
-        type: 'contrat',
-        filename,
-        memberNom: `${data.nom} ${data.prenom}`,
-        fonction: data.fonction,
-        exportedAt: new Date(),
-    } satisfies Omit<ExportedFileContrat, 'id'>);
-}
-
-export async function previewContractPDF(data: ContractPDFData): Promise<string> {
-    const doc = await buildContractDoc(data);
-    const blob = doc.output('blob');
-    return URL.createObjectURL(blob);
-}
-
-// --------------------
-// MANIFESTE
-// --------------------
-
-export interface ManifestePDFData {
-    shipName: string;
-    capitaine: string;
-    lieuDepart: string;
-    destination: string;
-    date: string;        // ex: "06 MAI 2026"
-    agentResponsable: string;
-    cargoItems: CargoItem[];
-    // Totaux (calculés automatiquement si non fournis)
-    totalColisStr?: string;
-    totalPoidsStr?: string;
-    totalColisLettre?: string;
-    totalPoidsLettre?: string;
-}
-
 async function buildManifesteDoc(data: ManifestePDFData): Promise<jsPDF> {
     const doc = new jsPDF('p', 'mm', 'a4', true) as any;
 
@@ -978,140 +910,186 @@ async function buildManifesteDoc(data: ManifestePDFData): Promise<jsPDF> {
     data.cargoItems.forEach((item, rowIndex) => {
         const x0 = marginX;
 
-        // Préparer les textes
-        const chargeurLines = [
-            ...doc.splitTextToSize(item.expediteurNom, col[1] - 3),
-            ...doc.splitTextToSize(item.expediteurAdresse, col[1] - 3),
-            ...(item.numCommande ? doc.splitTextToSize(item.numCommande, col[1] - 1) : []),
-            ...(item.numConteneur ? doc.splitTextToSize(item.numConteneur, col[1] - 1) : []),
-        ];
-        const destLines = [
+        const nomLines: string[] = doc.splitTextToSize(item.expediteurNom, col[1] - 3);
+        const adresseLines: string[] = doc.splitTextToSize(item.expediteurAdresse, col[1] - 3);
+        // Lignes fixes du chargeur (nom + adresse)
+        const chargeurFixeLines = [...nomLines, ...adresseLines];
+
+        const destLines: string[] = [
             ...doc.splitTextToSize(item.destinataireNom, col[2] - 3),
             ...doc.splitTextToSize(item.destinataireAdresse, col[2] - 3),
         ];
-        const declLines = [
+        const declLines: string[] = [
             ...doc.splitTextToSize(item.numDeclaration, col[5] - 1),
-            ...doc.splitTextToSize(fmtDateNumeric(item.dateDeclaration), col[5] - 1),
+            ...doc.splitTextToSize('DU ' + fmtDateNumeric(item.dateDeclaration), col[5] - 1),
         ];
 
-        // Calculer la hauteur totale de la ligne
-        const marchandisesLineCount = item.marchandises.reduce((sum, m) => {
-            return sum + doc.splitTextToSize(m.description, col[4] - 1).length;
-        }, 0); // +1 par marchandise pour l'espacement
+        // Pour chaque marchandise : calculer le nombre de lignes de description
+        const marchandisesData = item.marchandises.map(m => {
+            const descLines: string[] = doc.splitTextToSize(m.description, col[4] - 2);
+            // Lignes conteneur/plomb pour la colonne chargeur (alignées avec cette marchandise)
+            const conteneurLines: string[] = [];
+            if (m.numConteneur?.trim())
+                conteneurLines.push(...doc.splitTextToSize(m.numConteneur, col[1] - 3));
+            if (m.numPlomb?.trim())
+                conteneurLines.push(...doc.splitTextToSize(m.numPlomb, col[1] - 3));
 
-        const maxLines = Math.max(
-            chargeurLines.length,
-            destLines.length,
-            declLines.length,
-            marchandisesLineCount,
+            return {
+                m,
+                descLines,
+                conteneurLines,
+                // Hauteur de cette marchandise = max(descLines, conteneurLines)
+                lineCount: Math.max(descLines.length, conteneurLines.length),
+            };
+        });
+
+        // Hauteur totale des marchandises
+        const totalMarcHeight = marchandisesData.reduce(
+            (sum, md) => sum + md.lineCount * lineHeight + 1, 0
         );
-        const maxLines2 = Math.max(
-            chargeurLines.length,
-            destLines.length,
-            declLines.length,
+
+        // Hauteur totale de la ligne = max(chargeur fixe + conteneurs, dest, decl, marchandises)
+        const chargeurTotalLines = chargeurFixeLines.length +
+            marchandisesData.reduce((sum, md) => sum + md.conteneurLines.length, 0);
+
+        let rowHeight = Math.max(
+            chargeurTotalLines * lineHeight,
+            destLines.length * lineHeight,
+            declLines.length * lineHeight,
+            totalMarcHeight,
+        ); // padding
+
+        let rowHeader = Math.max(
+            chargeurFixeLines.length * lineHeight,
+            destLines.length * lineHeight,
+            declLines.length * lineHeight,
         );
 
-        let rowHeight = maxLines * lineHeight;
-
-        // Vérifier si besoin d'une nouvelle page
-        if (y + maxLines2 * lineHeight > pageHeight - 20) {
+        if (y + rowHeader > pageHeight - 20) {
             newPage();
         }
 
         let yRow = y + 4;
+        let yLine = yRow;
 
         // Col 0 — N°
         doc.setFont('times', 'bold');
         doc.setFontSize(8.5);
         doc.text(
             String(item.ordre ?? rowIndex + 1),
-            x0 + col[0] / 2, yRow,
+            x0 + col[0] / 2, yLine,
             { align: 'center' }
         );
 
-        // Col 1 — Chargeur
-        doc.setFont('times', 'bold');
-        doc.setFontSize(8.5);
-        let cx = x0 + col[0] + 1;
-        chargeurLines.forEach((line: string, li: number) => {
-            if (item.expediteurNom.includes(line) || item.expediteurAdresse.includes(line)) {
-                doc.setFont('times', 'bold');
-            } else doc.setFont('times', 'normal');
-            doc.text(line, cx, yRow + li * lineHeight, {
+        // ── Col 1 — Chargeur (nom + adresse fixes) ───────────────────
+        let cxChargeur = x0 + col[0] + 1;
+        let yChargeur = yLine;
+
+        // Nom du chargeur (bold)
+        nomLines.forEach((line, li) => {
+            doc.setFont('times', 'bold');
+            doc.text(line, cxChargeur, yChargeur + li * lineHeight, {
                 maxWidth: col[1] - 1,
             });
         });
+        yChargeur += nomLines.length * lineHeight;
 
-        // Col 2 — Destinataire
-        doc.setFont('times', 'bold');
-        cx = x0 + col[0] + col[1] + 1;
-        destLines.forEach((line: string, li: number) => {
-            doc.text(line, cx, yRow + li * lineHeight, {
+        // Adresse du chargeur (normal)
+        adresseLines.forEach((line, li) => {
+            doc.setFont('times', 'bold');
+            doc.text(line, cxChargeur, yChargeur + li * lineHeight, {
+                maxWidth: col[1] - 1,
+            });
+        });
+        yChargeur += adresseLines.length * lineHeight;
+
+        // ── Col 2 — Destinataire ─────────────────────────────────────
+        const cxDest = x0 + col[0] + col[1] + 1;
+        destLines.forEach((line, li) => {
+            doc.setFont('times', 'bold');
+            doc.text(line, cxDest, yLine + li * lineHeight, {
                 maxWidth: col[2] - 1,
             });
         });
 
-        // Col 5 — Déclaration
-        cx = x0 + col[0] + col[1] + col[2] + col[3] + col[4];
-        doc.setFont('times', 'bold');
-        declLines.forEach((line: string, li: number) => {
-            doc.text(line, cx + 1, yRow + li * lineHeight, {
+        // ── Col 5 — Déclaration ──────────────────────────────────────
+        const cxDecl = x0 + col[0] + col[1] + col[2] + col[3] + col[4];
+        declLines.forEach((line, li) => {
+            doc.setFont('times', 'bold');
+            doc.text(line, cxDecl + 1, yLine + li * lineHeight, {
                 maxWidth: col[5] - 1,
             });
         });
 
-        // Cols 3, 4, 5 — Marchandises
-        let yColis = yRow;
-        cx = x0 + col[0] + col[1] + col[2];
+        // ── Cols 3, 4, 6 — Marchandises + Col 1 conteneur/plomb ──────
+        const cxMarc = x0 + col[0] + col[1] + col[2];
+        let yColis = yChargeur;
 
-        const totalMarchandises = item.marchandises.length;
-        let leftMarchandises;
-        item.marchandises.forEach((m, idx) => {
-            let nextIdx = (idx + 1) >= (item.marchandises.length - 1) ? (item.marchandises.length - 1) : (idx + 1);
-            let nextColisLines = doc.splitTextToSize(item.marchandises[nextIdx].description, col[4] - 1).length;
-
-            if (yColis + nextColisLines * lineHeight > pageHeight - 20) {
+        marchandisesData.forEach(({ m, descLines, conteneurLines, lineCount }, idx) => {
+            // Vérifier nouvelle page pour la marchandise
+            if (yColis + lineCount * lineHeight > pageHeight - 20) {
+                let rowHeightLeft = 0;
+                for(let i=idx; i < marchandisesData.length - 1; i++){
+                    rowHeightLeft += marchandisesData[i].lineCount * lineHeight;
+                }
+                
                 newPage();
                 yRow = y;
-                leftMarchandises = totalMarchandises - (idx + 1);
                 yColis = marginY + 4;
-                rowHeight = leftMarchandises * lineHeight;
+                yChargeur = yColis;
+                rowHeight = rowHeightLeft;
             }
-            // Col 3 — Nb colis (centré)
+
+            // Col 3 — Nb colis (centré verticalement sur la première ligne)
             doc.setFont('times', 'normal');
             doc.setFontSize(8.5);
             doc.text(
                 String(m.nbColis),
-                cx + col[3] / 2, yColis,
+                cxMarc + col[3] / 2, yColis,
                 { align: 'center' }
             );
 
             // Col 4 — Description
-            const descLines: string[] = doc.splitTextToSize(m.description, col[4] - 2);
-            descLines.forEach((line: string, li: number) => {
-                doc.text(line, cx + col[3] + 1, yColis + li * lineHeight, {
-                    maxWidth: col[4] - 1,
+            descLines.forEach((line, li) => {
+                doc.setFont('times', 'normal');
+                doc.text(line, cxMarc + col[3] + 1, yColis + li * lineHeight, {
+                    maxWidth: col[4] - 2,
                 });
             });
 
-            // Col 6 — Poids
+            // Col 6 — Poids (aligné sur première ligne de la marchandise)
             doc.setFont('times', 'bold');
-            const poidsStr = formatPoidsKg(m.poidsKg);
             doc.text(
-                poidsStr,
-                cx + col[3] + col[4] + col[5] + col[6] / 2,
+                formatPoidsKg(Number(m.poidsKg) || 0),
+                cxMarc + col[3] + col[4] + col[5] + col[6] / 2,
                 yColis,
                 { align: 'center' }
             );
             doc.setFont('times', 'normal');
 
-            yColis += descLines.length * lineHeight + 1;
+            // Col 1 — Conteneur/Plomb aligné avec cette marchandise
+            if (conteneurLines.length > 0) {
+                conteneurLines.forEach((line, li) => {
+                    doc.setFont('times', 'normal');
+                    doc.text(line, cxChargeur, yColis + li * lineHeight, {
+                        maxWidth: col[1] - 2,
+                    });
+                });
+                // yChargeur += conteneurLines.length * lineHeight;
+                yColis += lineCount * lineHeight + 2;
+            } else {
+                yColis += lineCount * lineHeight + 0.5;
+            }
+
+            // Espacement entre marchandises (petite marge, pas de ligne)
+            yChargeur = yColis;
         });
-
-        // Hauteur effective
-        rowHeight = Math.max(rowHeight, (yColis - yRow));
-
-        y = yRow + rowHeight;
+        
+        // Hauteur effective de la ligne
+        const effectiveHeight = Math.max(yColis - yRow, rowHeight);
+        
+        // Petite marge entre items (pas de ligne séparatrice)
+        y = yRow + effectiveHeight + 2;
     });
 
     // Ligne de fermeture du tableau
@@ -1194,6 +1172,67 @@ async function buildManifesteDoc(data: ManifestePDFData): Promise<jsPDF> {
 }
 
 // ── API publique ──────────────────────────────────────────────────
+export async function generateCrewListPDF(list: CrewList): Promise<void> {
+    const doc = await buildCrewListDoc(list);
+    const filename = buildFilename('AE_LISTE_EQUIPAGE');
+    doc.save(filename);
+    await logExport({
+        type: 'liste',
+        filename,
+        shipName: list.shipName,
+        destination: list.destination,
+        membersCount: list.members.length,
+        exportedAt: new Date()
+    } satisfies Omit<ExportedFileListe, 'id'>);
+}
+
+export async function previewCrewListPDF(list: CrewList): Promise<string> {
+    const doc = await buildCrewListDoc(list);
+    const blob = doc.output('blob');
+    return URL.createObjectURL(blob);
+}
+
+export async function generateChecklistPDF(doc_: ChecklistDoc): Promise<void> {
+    const doc = await buildChecklistDoc(doc_);
+    const filename = buildFilename('AE_CHECKLIST');
+    doc.save(filename);
+    await logExport({
+        type: 'checklist',
+        filename,
+        shipName: doc_.shipName,
+        membersCount: doc_.members.length,
+        exportedAt: new Date()
+    } satisfies Omit<ExportedFileChecklist, 'id'>);
+}
+
+export async function previewChecklistPDF(doc_: ChecklistDoc): Promise<string> {
+    const doc = await buildChecklistDoc(doc_);
+    const blob = doc.output('blob');
+    return URL.createObjectURL(blob);
+}
+
+export async function generateContractPDF(data: ContractPDFData): Promise<void> {
+    const doc = await buildContractDoc(data);
+    const now = new Date();
+    const date = `${pad2(now.getDate())}${pad2(now.getMonth() + 1)}${now.getFullYear()}`;
+    const ms = now.getTime();
+    const filename = `AE_CONTRAT_${data.nom}_${data.prenom}_${date}_${ms}.pdf`;
+    doc.save(filename);
+    await logExport({
+        type: 'contrat',
+        filename,
+        memberNom: `${data.nom} ${data.prenom}`,
+        fonction: data.fonction,
+        exportedAt: new Date(),
+    } satisfies Omit<ExportedFileContrat, 'id'>);
+}
+
+export async function previewContractPDF(data: ContractPDFData): Promise<string> {
+    const doc = await buildContractDoc(data);
+    const blob = doc.output('blob');
+    return URL.createObjectURL(blob);
+}
+
 export async function generateManifestePDF(data: ManifestePDFData): Promise<void> {
     const doc = await buildManifesteDoc(data);
     const filename = buildFilename('AE_MANIFESTE_CARGO');

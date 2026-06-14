@@ -24,15 +24,16 @@ interface Props {
 }
 
 function emptyMarchandise() {
-    return { nbColis: 0, description: '', poidsKg: 0 };
+    return {
+        nbColis: 0, description: '', poidsKg: 0, numConteneur: '',
+        numPlomb: '',
+    };
 }
 
 function emptyCargoForm() {
     return {
         expediteurNom: '',
         expediteurAdresse: '',
-        numCommande: '',
-        numConteneur: '',
         destinataireNom: '',
         destinataireAdresse: '',
         numDeclaration: '',
@@ -115,8 +116,6 @@ export default function CargoPage({ voyage, onBack }: Props) {
         setForm({
             expediteurNom: item.expediteurNom,
             expediteurAdresse: item.expediteurAdresse,
-            numCommande: item.numCommande,
-            numConteneur: item.numConteneur,
             destinataireNom: item.destinataireNom,
             destinataireAdresse: item.destinataireAdresse,
             numDeclaration: item.numDeclaration,
@@ -398,14 +397,6 @@ export default function CargoPage({ voyage, onBack }: Props) {
                                         value={form.expediteurAdresse}
                                         onChange={e => setForm(f => ({ ...f, expediteurAdresse: e.target.value }))}
                                         placeholder="Adresse" />
-                                    <Input label="N° conteneur"
-                                        value={form.numCommande}
-                                        onChange={e => setForm(f => ({ ...f, numCommande: e.target.value }))}
-                                        placeholder="N° conteneur" />
-                                    <Input label="N° plomb"
-                                        value={form.numConteneur}
-                                        onChange={e => setForm(f => ({ ...f, numConteneur: e.target.value }))}
-                                        placeholder="N° plomb" />
                                 </div>
 
                                 {/* Destinataire */}
@@ -521,10 +512,12 @@ export default function CargoPage({ voyage, onBack }: Props) {
                                                         return { ...f, marchandises: ms };
                                                     })}
                                                     className="w-full bg-navy-700 border border-navy-600 rounded-lg
-                          px-2 py-1.5 text-sm text-slate-200 focus:outline-none
-                          focus:border-ocean-500 transition"
+                                                    px-2 py-1.5 text-sm text-slate-200 focus:outline-none
+                                                    focus:border-ocean-500 transition"
                                                 />
                                             </div>
+
+
                                             {/* Supprimer */}
                                             <div className="flex items-end pb-0.5">
                                                 <button
@@ -555,6 +548,45 @@ export default function CargoPage({ voyage, onBack }: Props) {
                         px-3 py-2 text-sm text-slate-200 focus:outline-none
                         focus:border-ocean-500 transition resize-none"
                                         />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2 mt-2">
+                                        <div>
+                                            <label className="block text-xs text-slate-500 mb-1">
+                                                N° Conteneur
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={m.numConteneur ?? ''}
+                                                onChange={e => setForm(f => {
+                                                    const ms = [...f.marchandises];
+                                                    ms[idx] = { ...ms[idx], numConteneur: e.target.value };
+                                                    return { ...f, marchandises: ms };
+                                                })}
+                                                placeholder="N° Conteneur"
+                                                className="w-full bg-navy-700 border border-navy-600 rounded-lg
+                                                px-2 py-1.5 text-xs text-slate-200 focus:outline-none
+                                                focus:border-ocean-500 transition"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-slate-500 mb-1">
+                                                N° Plomb
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={m.numPlomb ?? ''}
+                                                onChange={e => setForm(f => {
+                                                    const ms = [...f.marchandises];
+                                                    ms[idx] = { ...ms[idx], numPlomb: e.target.value };
+                                                    return { ...f, marchandises: ms };
+                                                })}
+                                                placeholder="N° Plomb"
+                                                className="w-full bg-navy-700 border border-navy-600 rounded-lg
+                                                px-2 py-1.5 text-xs text-slate-200 focus:outline-none
+                                                focus:border-ocean-500 transition"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -596,16 +628,6 @@ export default function CargoPage({ voyage, onBack }: Props) {
                                 {viewingCargo.expediteurAdresse && (
                                     <div className="text-slate-400 text-xs mt-1">
                                         {viewingCargo.expediteurAdresse}
-                                    </div>
-                                )}
-                                {viewingCargo.numCommande && (
-                                    <div className="text-slate-500 text-xs mt-1">
-                                        Cont : {viewingCargo.numCommande}
-                                    </div>
-                                )}
-                                {viewingCargo.numConteneur && (
-                                    <div className="text-slate-500 text-xs">
-                                        Plomb : {viewingCargo.numConteneur}
                                     </div>
                                 )}
                             </div>

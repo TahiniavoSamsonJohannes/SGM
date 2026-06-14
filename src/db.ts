@@ -152,6 +152,8 @@ export interface CargoMarchandise {
     nbColis: number;
     description: string;
     poidsKg: number;
+    numConteneur: string;
+    numPlomb: string;
 }
 
 export interface CargoItem {
@@ -161,8 +163,6 @@ export interface CargoItem {
     // Chargeur
     expediteurNom: string;
     expediteurAdresse: string;
-    numCommande: string;
-    numConteneur: string;
     // Destinataire
     destinataireNom: string;
     destinataireAdresse: string;
