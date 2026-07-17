@@ -1023,20 +1023,41 @@ async function buildManifesteDoc(data: ManifestePDFData): Promise<jsPDF> {
 
         // ── Cols 3, 4, 6 — Marchandises + Col 1 conteneur/plomb ──────
         const cxMarc = x0 + col[0] + col[1] + col[2];
+
+        // Deux curseurs indépendants :
+        // - yColis    : position pour Nb colis / Description / Poids (cols 3, 4, 6)
+        // - yChargeur : position pour conteneur/plomb (col 1), déjà initialisé
+        //               juste après le bloc NOM + Adresse du chargeur ci-dessus
         let yColis = yChargeur;
 
         marchandisesData.forEach(({ m, descLines, conteneurLines, lineCount }, idx) => {
+            const hasConteneur = conteneurLines.length > 0;
+
+            // ── Position de départ de cette marchandise ──────────────
+            // - Sans conteneur/plomb : premier colis → aligné avec le NOM (yLine),
+            //   colis suivant → juste après le colis précédent (yColis).
+            // - Avec conteneur/plomb : on garde la logique actuelle, en ne
+            //   démarrant jamais avant la fin du bloc Chargeur ni avant la
+            //   fin du colis précédent (pour ne jamais chevaucher NOM/Adresse).
+            let yStart: number;
+            if (idx === 0) {
+                yStart = hasConteneur ? yChargeur : yLine;
+            } else {
+                yStart = hasConteneur ? Math.max(yColis, yChargeur) : yColis;
+            }
+
             // Vérifier nouvelle page pour la marchandise
-            if (yColis + lineCount * lineHeight > pageHeight - 20) {
+            if (yStart + lineCount * lineHeight > pageHeight - 20) {
                 let rowHeightLeft = 0;
-                for(let i=idx; i < marchandisesData.length - 1; i++){
+                for (let i = idx; i < marchandisesData.length - 1; i++) {
                     rowHeightLeft += marchandisesData[i].lineCount * lineHeight;
                 }
-                
+
                 newPage();
                 yRow = y;
-                yColis = marginY + 4;
-                yChargeur = yColis;
+                yStart = marginY + 4;
+                yColis = yStart;
+                yChargeur = yStart;
                 rowHeight = rowHeightLeft;
             }
 
@@ -1045,14 +1066,14 @@ async function buildManifesteDoc(data: ManifestePDFData): Promise<jsPDF> {
             doc.setFontSize(8.5);
             doc.text(
                 String(m.nbColis),
-                cxMarc + col[3] / 2, yColis,
+                cxMarc + col[3] / 2, yStart,
                 { align: 'center' }
             );
 
             // Col 4 — Description
             descLines.forEach((line, li) => {
                 doc.setFont('times', 'normal');
-                doc.text(line, cxMarc + col[3] + 1, yColis + li * lineHeight, {
+                doc.text(line, cxMarc + col[3] + 1, yStart + li * lineHeight, {
                     maxWidth: col[4] - 2,
                 });
             });
@@ -1062,32 +1083,30 @@ async function buildManifesteDoc(data: ManifestePDFData): Promise<jsPDF> {
             doc.text(
                 formatPoidsKg(Number(m.poidsKg) || 0),
                 cxMarc + col[3] + col[4] + col[5] + col[6] / 2,
-                yColis,
+                yStart,
                 { align: 'center' }
             );
             doc.setFont('times', 'normal');
 
             // Col 1 — Conteneur/Plomb aligné avec cette marchandise
-            if (conteneurLines.length > 0) {
+            if (hasConteneur) {
                 conteneurLines.forEach((line, li) => {
                     doc.setFont('times', 'normal');
-                    doc.text(line, cxChargeur, yColis + li * lineHeight, {
+                    doc.text(line, cxChargeur, yStart + li * lineHeight, {
                         maxWidth: col[1] - 2,
                     });
                 });
-                // yChargeur += conteneurLines.length * lineHeight;
-                yColis += lineCount * lineHeight + 2;
+                yChargeur = yStart + conteneurLines.length * lineHeight + 2;
+                yColis = yStart + lineCount * lineHeight + 2;
             } else {
-                yColis += lineCount * lineHeight + 0.5;
+                yColis = yStart + lineCount * lineHeight + 0.5;
             }
-
-            // Espacement entre marchandises (petite marge, pas de ligne)
-            yChargeur = yColis;
         });
-        
-        // Hauteur effective de la ligne
-        const effectiveHeight = Math.max(yColis - yRow, rowHeight);
-        
+
+        // Hauteur effective de la ligne (on tient compte des deux colonnes,
+        // celle des colis ET celle des conteneurs/plombs)
+        const effectiveHeight = Math.max(yColis - yRow, yChargeur - yRow, rowHeight);
+
         // Petite marge entre items (pas de ligne séparatrice)
         y = yRow + effectiveHeight + 2;
     });
